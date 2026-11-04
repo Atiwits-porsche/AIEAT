@@ -7,16 +7,22 @@ import Ring from './Ring'
 import { useMeasuredBmr } from '../lib/body'
 import WeightCard from './WeightCard'
 import AddFoodSheet from './AddFoodSheet'
+import AddActivitySheet from './AddActivitySheet'
+import ActivityList from './ActivityList'
 
 export default function Today({ profile }: { profile: Profile }) {
   const [date, setDate] = useState(todayStr())
   const [adding, setAdding] = useState<Meal | null>(null)
+  const [addingAct, setAddingAct] = useState(false)
+  const acts = useLiveQuery(() => db.activities.where('date').equals(date).sortBy('createdAt'), [date]) ?? []
+  const burned = acts.reduce((s, a) => s + a.kcal, 0)
   const entries = useLiveQuery(() => db.entries.where('date').equals(date).sortBy('createdAt'), [date]) ?? []
   const weights = useLiveQuery(() => db.weights.toArray(), []) ?? []
   const measured = useMeasuredBmr(profile)
 
   const weight = latestWeight(weights, date) ?? profile.startWeight
-  const { target } = calorieTarget(profile, weight, measured)
+  const base = calorieTarget(profile, weight, measured).target
+  const target = base + (profile.addExercise ? burned : 0)
   const eaten = entries.reduce((s, e) => s + e.kcalPerUnit * e.qty, 0)
   const remaining = target - eaten
   const isToday = date === todayStr()
@@ -55,6 +61,7 @@ export default function Today({ profile }: { profile: Profile }) {
         </div>
         <div className="flex-1 space-y-2 text-sm">
           <Stat label="เป้าหมาย" value={`${fmtInt(target)} kcal`} />
+          {profile.addExercise && burned > 0 && <Stat label="รวมออกกำลังกาย" value={`+${fmtInt(burned)}`} />}
           <Stat label="กินไปแล้ว" value={`${fmtInt(eaten)} kcal`} />
           <div className="space-y-1 pt-1">
             {MEALS.map((m) => {
@@ -71,6 +78,22 @@ export default function Today({ profile }: { profile: Profile }) {
       </section>
 
       <WeightCard date={date} weights={weights} profile={profile} />
+
+      <section className="mt-3 rounded-2xl bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">🏃 ออกกำลังกาย</h2>
+          <span className="text-sm text-slate-500">
+            {acts.reduce((s, a) => s + a.minutes, 0)} นาที · {fmtInt(burned)} kcal
+          </span>
+        </div>
+        <ActivityList items={acts} />
+        <button
+          onClick={() => setAddingAct(true)}
+          className="mt-2 w-full rounded-xl border border-dashed border-orange-300 py-2 text-sm font-medium text-orange-700 active:bg-orange-50"
+        >
+          + บันทึกกิจกรรม
+        </button>
+      </section>
 
       {/* มื้ออาหาร */}
       {MEALS.map((m) => {
@@ -98,6 +121,7 @@ export default function Today({ profile }: { profile: Profile }) {
       })}
 
       {adding && <AddFoodSheet date={date} meal={adding} onClose={() => setAdding(null)} />}
+      {addingAct && <AddActivitySheet date={date} profile={profile} onClose={() => setAddingAct(false)} />}
     </div>
   )
 }

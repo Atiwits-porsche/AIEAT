@@ -19,7 +19,7 @@ const H = 220
 const M = { l: 38, r: 10, t: 12, b: 26 }
 
 /** callback ref: ติดตามความกว้างของ element ปัจจุบันเสมอ แม้ element จะถูกสลับ */
-function useWidth() {
+export function useWidth() {
   const [el, setEl] = useState<HTMLDivElement | null>(null)
   const [w, setW] = useState(320)
   useEffect(() => {
@@ -31,7 +31,7 @@ function useWidth() {
   return [setEl, w] as const
 }
 
-function niceTicks(lo: number, hi: number, max = 5) {
+export function niceTicks(lo: number, hi: number, max = 5) {
   const span = hi - lo || 1
   const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 250, 500, 1000]
   const step = steps.find((s) => span / s <= max) ?? 2000
@@ -40,7 +40,7 @@ function niceTicks(lo: number, hi: number, max = 5) {
   return { ticks: out, step }
 }
 
-const shortDate = (d: string) => {
+export const shortDate = (d: string) => {
   const [y, m, day] = d.split('-').map(Number)
   return new Date(y, m - 1, day).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
 }
@@ -71,7 +71,7 @@ export function Legend({ items }: { items: { label: string; color: string; kind:
   )
 }
 
-function Tooltip({ x, width, children }: { x: number; width: number; children: ReactNode }) {
+export function Tooltip({ x, width, children }: { x: number; width: number; children: ReactNode }) {
   const tw = 150
   const left = Math.min(Math.max(x - tw / 2, 0), width - tw)
   return (
@@ -84,7 +84,7 @@ function Tooltip({ x, width, children }: { x: number; width: number; children: R
   )
 }
 
-function TipRow({ color, label, value, kind = 'line' }: { color: string; label: string; value: string; kind?: 'line' | 'rect' }) {
+export function TipRow({ color, label, value, kind = 'line' }: { color: string; label: string; value: string; kind?: 'line' | 'rect' }) {
   return (
     <div className="flex items-center gap-1.5">
       <svg width="10" height="8" aria-hidden>
@@ -97,7 +97,7 @@ function TipRow({ color, label, value, kind = 'line' }: { color: string; label: 
 }
 
 /** แบ่ง path เป็นช่วงต่อเนื่อง ข้ามจุดที่ไม่มีค่า */
-function linePath(vals: (number | undefined)[], x: (i: number) => number, y: (v: number) => number) {
+export function linePath(vals: (number | undefined)[], x: (i: number) => number, y: (v: number) => number) {
   let d = ''
   let pen = false
   vals.forEach((v, i) => {

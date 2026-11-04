@@ -5,9 +5,10 @@ import Today from './components/Today'
 import Settings from './components/Settings'
 import Analysis from './components/Analysis'
 import Body from './components/Body'
+import Exercise from './components/Exercise'
 import ProfileForm from './components/ProfileForm'
 
-type Tab = 'today' | 'stats' | 'body' | 'settings'
+type Tab = 'today' | 'stats' | 'exercise' | 'body' | 'settings'
 
 export default function App() {
   const profile = useLiveQuery(() => db.profile.get('me'), [], null)
@@ -33,6 +34,7 @@ export default function App() {
     <div className="mx-auto min-h-dvh max-w-lg pb-24">
       {tab === 'today' && <Today profile={profile} />}
       {tab === 'stats' && <Analysis profile={profile} />}
+      {tab === 'exercise' && <Exercise profile={profile} />}
       {tab === 'body' && <Body profile={profile} />}
       {tab === 'settings' && <Settings profile={profile} />}
 
@@ -42,6 +44,7 @@ export default function App() {
             [
               ['today', '📋', 'บันทึก'],
               ['stats', '📊', 'สถิติ'],
+              ['exercise', '🏃', 'ออกกำลัง'],
               ['body', '🧬', 'ร่างกาย'],
               ['settings', '⚙️', 'ตั้งค่า'],
             ] as const

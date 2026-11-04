@@ -16,6 +16,13 @@ export interface Profile {
   createdAt: string
   /** ใช้ BMR จากเครื่องวัดองค์ประกอบร่างกายแทนสูตร */
   useScanBmr?: boolean
+  /** แผนลดน้ำหนัก: เริ่มวันไหน น้ำหนักเท่าไหร่ ภายในกี่เดือน */
+  planStartDate?: string
+  planStartWeight?: number
+  planMonths?: number
+  /** นับแคลที่เผาผลาญจากการออกกำลังกายเพิ่มในงบแคลของวันนั้น */
+  addExercise?: boolean
+  exerciseLevel?: 'beginner' | 'intermediate' | 'advanced'
 }
 
 export interface WeightLog {
@@ -57,6 +64,16 @@ export interface BodyScan {
   note?: string
 }
 
+export interface ActivityLog {
+  id?: number
+  date: string
+  type: string // key ใน ACTIVITY_TYPES
+  name: string
+  minutes: number
+  kcal: number
+  createdAt: number
+}
+
 export interface CustomFood {
   id?: number
   name: string
@@ -70,6 +87,7 @@ class AieatDB extends Dexie {
   entries!: EntityTable<MealEntry, 'id'>
   customFoods!: EntityTable<CustomFood, 'id'>
   bodyScans!: EntityTable<BodyScan, 'id'>
+  activities!: EntityTable<ActivityLog, 'id'>
 
   constructor() {
     super('aieat')
@@ -80,6 +98,7 @@ class AieatDB extends Dexie {
       customFoods: '++id, name',
     })
     this.version(2).stores({ bodyScans: '++id, date' })
+    this.version(3).stores({ activities: '++id, date, createdAt' })
   }
 }
 
@@ -93,25 +112,27 @@ export const MEALS: { key: Meal; label: string; icon: string }[] = [
 ]
 
 export async function exportAll() {
-  const [profile, weights, entries, customFoods, bodyScans] = await Promise.all([
+  const [profile, weights, entries, customFoods, bodyScans, activities] = await Promise.all([
     db.profile.toArray(),
     db.weights.toArray(),
     db.entries.toArray(),
     db.customFoods.toArray(),
     db.bodyScans.toArray(),
+    db.activities.toArray(),
   ])
-  return { app: 'aieat', version: 2, exportedAt: new Date().toISOString(), profile, weights, entries, customFoods, bodyScans }
+  return { app: 'aieat', version: 3, exportedAt: new Date().toISOString(), profile, weights, entries, customFoods, bodyScans, activities }
 }
 
 export async function importAll(data: unknown) {
   const d = data as Partial<Awaited<ReturnType<typeof exportAll>>>
   if (!d || d.app !== 'aieat') throw new Error('ไฟล์นี้ไม่ใช่ข้อมูลของ AIEAT')
-  await db.transaction('rw', [db.profile, db.weights, db.entries, db.customFoods, db.bodyScans], async () => {
-    await Promise.all([db.profile.clear(), db.weights.clear(), db.entries.clear(), db.customFoods.clear(), db.bodyScans.clear()])
+  await db.transaction('rw', [db.profile, db.weights, db.entries, db.customFoods, db.bodyScans, db.activities], async () => {
+    await Promise.all([db.profile.clear(), db.weights.clear(), db.entries.clear(), db.customFoods.clear(), db.bodyScans.clear(), db.activities.clear()])
     await db.profile.bulkPut(d.profile ?? [])
     await db.weights.bulkPut(d.weights ?? [])
     await db.entries.bulkPut(d.entries ?? [])
     await db.customFoods.bulkPut(d.customFoods ?? [])
     await db.bodyScans.bulkPut(d.bodyScans ?? [])
+    await db.activities.bulkPut(d.activities ?? [])
   })
 }

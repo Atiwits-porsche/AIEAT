@@ -4,10 +4,12 @@ import { db, type Profile } from '../lib/db'
 import { calorieTarget, fmt1, fmtInt, latestWeight } from '../lib/calc'
 import { addDays, formatThaiDate, todayStr } from '../lib/date'
 import {
-  dateRange, estimateRealTDEE, insights, mealShare, projectGoal, streak, summarizeDays, topFoods, weeklyRows,
+  dateRange, estimateRealTDEE, insights, mealShare, streak, summarizeDays, topFoods, weeklyRows,
 } from '../lib/stats'
 import { C, CalorieChart, WeightChart } from './Charts'
 import { useMeasuredBmr } from '../lib/body'
+import PlanCard from './PlanCard'
+import { useExerciseBonus } from '../lib/exercise'
 
 const RANGES = [
   { key: 7, label: '7 วัน' },
@@ -22,6 +24,7 @@ export default function Analysis({ profile }: { profile: Profile }) {
   const entries = useLiveQuery(() => db.entries.toArray(), [])
   const today = todayStr()
   const measured = useMeasuredBmr(profile)
+  const bonus = useExerciseBonus(profile)
 
   const data = useMemo(() => {
     if (!weights || !entries) return null
@@ -31,7 +34,7 @@ export default function Analysis({ profile }: { profile: Profile }) {
       const all = [profile.createdAt, ...weights.map((w) => w.date), ...entries.map((e) => e.date)].sort()
       from = all[0] < today ? all[0] : addDays(today, -6)
     }
-    const days = summarizeDays(profile, weights, entries, dateRange(from, today), measured)
+    const days = summarizeDays(profile, weights, entries, dateRange(from, today), measured, bonus)
     const inRange = entries.filter((e) => e.date >= from && e.date <= today)
     const complete = days.filter((d) => d.logged && d.date !== today)
     const completeSet = new Set(complete.map((d) => d.date))
@@ -50,14 +53,12 @@ export default function Analysis({ profile }: { profile: Profile }) {
       notes: insights(days, inRange, today),
       weeks: weeklyRows(days, today),
       streak: streak(weights, entries, today),
-      proj: projectGoal(profile, weights, today),
       real: estimateRealTDEE(weights, entries, today),
       formula: calorieTarget(profile, latestWeight(weights, today) ?? profile.startWeight, measured),
     }
-  }, [weights, entries, range, profile, today, measured?.kcal, measured?.weight])
+  }, [weights, entries, range, profile, today, measured?.kcal, measured?.weight, bonus])
 
   if (!data) return null
-  const { proj } = data
 
   return (
     <div className="space-y-3 px-4 pt-4">
@@ -87,32 +88,7 @@ export default function Analysis({ profile }: { profile: Profile }) {
         <Tile label="บันทึกต่อเนื่อง" value={String(data.streak)} unit="วัน" sub={data.streak >= 7 ? 'เยี่ยมมาก 🔥' : 'บันทึกทุกวันจะวิเคราะห์ได้แม่นขึ้น'} />
       </div>
 
-      {/* คาดการณ์ */}
-      <Card title="🏁 คาดการณ์วันถึงเป้าหมาย">
-        {proj.status === 'reached' && <p className="text-lg font-semibold text-emerald-700">ถึงน้ำหนักเป้าหมายแล้ว 🎉</p>}
-        {proj.status === 'ok' && (
-          <>
-            <p className="text-2xl font-bold text-emerald-700">{formatThaiDate(proj.date)}</p>
-            <p className="mt-1 text-sm text-slate-600">
-              อีกประมาณ {Math.ceil(proj.weeks)} สัปดาห์ · ตอนนี้ลดได้ {fmt1(proj.perWeek)} กก./สัปดาห์ (เป้า {profile.ratePerWeek})
-            </p>
-          </>
-        )}
-        {proj.status === 'insufficient' && (
-          <>
-            <p className="text-2xl font-bold text-slate-700">{formatThaiDate(proj.planDate)}</p>
-            <p className="mt-1 text-sm text-slate-600">
-              คำนวณตามแผน {profile.ratePerWeek} กก./สัปดาห์ — ชั่งน้ำหนักเช้าอย่างน้อย 5 วันในช่วง 7 วันขึ้นไป จะคำนวณจากแนวโน้มจริงให้
-            </p>
-          </>
-        )}
-        {proj.status === 'not-losing' && (
-          <p className="text-sm text-amber-700">
-            ⚠️ 4 สัปดาห์ล่าสุดน้ำหนักยังไม่ลด ({proj.perWeek <= 0 ? `+${fmt1(-proj.perWeek)}` : fmt1(proj.perWeek)} กก./สัปดาห์)
-            ลองเช็กว่าบันทึกอาหารครบทุกมื้อ หรือปรับเป้าแคลลง
-          </p>
-        )}
-      </Card>
+      <PlanCard profile={profile} weights={weights ?? []} today={today} measured={measured} />
 
       {/* TDEE จริง */}
       <Card title="🔥 พลังงานที่ใช้จริง (TDEE)">
