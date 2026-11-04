@@ -99,6 +99,7 @@ export default function Settings({ profile }: { profile: Profile }) {
           }}
         />
       </section>
+      <p className="pb-2 text-center text-[11px] text-slate-400">AIEAT เวอร์ชัน {__APP_VERSION__}</p>
     </div>
   )
 }

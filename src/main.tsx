@@ -18,6 +18,20 @@ navigator.storage?.persist?.().catch(() => {})
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch((e) => console.warn('SW register failed', e))
+    navigator.serviceWorker
+      .register('./sw.js', { updateViaCache: 'none' })
+      .then((reg) => {
+        // เช็กเวอร์ชันใหม่ทุกครั้งที่กลับมาเปิดแอป
+        document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && reg?.update().catch(() => {}))
+      })
+      .catch((e) => console.warn('SW register failed', e))
+  })
+  // มี service worker เวอร์ชันใหม่มาแทน → โหลดหน้าใหม่ครั้งเดียวให้ได้โค้ดล่าสุด
+  const hadController = !!navigator.serviceWorker.controller
+  let reloaded = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return
+    reloaded = true
+    window.location.reload()
   })
 }

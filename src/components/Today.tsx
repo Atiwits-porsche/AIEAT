@@ -5,13 +5,14 @@ import { calorieTarget, fmtInt, latestWeight } from '../lib/calc'
 import { addDays, formatThaiDate } from '../lib/date'
 import { useFollowToday, useToday } from '../lib/useToday'
 import Ring from './Ring'
+import { useSync } from '../lib/sync'
 import { useMeasuredBmr } from '../lib/body'
 import WeightCard from './WeightCard'
 import AddFoodSheet from './AddFoodSheet'
 import AddActivitySheet from './AddActivitySheet'
 import ActivityList from './ActivityList'
 
-export default function Today({ profile }: { profile: Profile }) {
+export default function Today({ profile, onOpenAccount }: { profile: Profile; onOpenAccount?: () => void }) {
   const today = useToday()
   const [date, setDate] = useFollowToday(today, (t) => t)
   const [adding, setAdding] = useState<Meal | null>(null)
@@ -31,6 +32,7 @@ export default function Today({ profile }: { profile: Profile }) {
 
   return (
     <div className="px-4 pt-4">
+      <CloudBanner onOpen={onOpenAccount} />
       {/* ตัวเลือกวันที่ */}
       <div className="flex items-center justify-between">
         <button onClick={() => setDate(addDays(date, -1))} className="rounded-full px-3 py-1 text-2xl text-slate-500" aria-label="วันก่อนหน้า">‹</button>
@@ -160,5 +162,27 @@ function EntryRow({ entry: e }: { entry: MealEntry }) {
         aria-label={`ลบ ${e.name}`}
       >×</button>
     </li>
+  )
+}
+
+const BANNER_KEY = 'aieat.cloudBanner.hidden'
+function CloudBanner({ onOpen }: { onOpen?: () => void }) {
+  const sync = useSync()
+  const [hidden, setHidden] = useState(() => {
+    try { return localStorage.getItem(BANNER_KEY) === '1' } catch { return false }
+  })
+  if (hidden || sync.status !== 'signed-out' || !onOpen) return null
+  return (
+    <div className="mb-3 flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm">
+      <span className="text-xl">☁️</span>
+      <button onClick={onOpen} className="min-w-0 flex-1 text-left">
+        <span className="block font-semibold text-sky-900">สมัคร / เข้าสู่ระบบ เพื่อเก็บข้อมูลบนคลาวด์</span>
+        <span className="block text-xs text-sky-800">ไม่หายเมื่อเปลี่ยนมือถือ ใช้ได้หลายเครื่อง ›</span>
+      </button>
+      <button
+        onClick={() => { setHidden(true); try { localStorage.setItem(BANNER_KEY, '1') } catch { /* ignore */ } }}
+        className="px-1 text-lg text-sky-400" aria-label="ซ่อน"
+      >×</button>
+    </div>
   )
 }
