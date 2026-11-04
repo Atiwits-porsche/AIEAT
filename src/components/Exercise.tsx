@@ -3,10 +3,11 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type ActivityLog, type Profile } from '../lib/db'
 import { ACTIVITY } from '../lib/calc'
 import { fmtInt } from '../lib/calc'
-import { addDays, formatThaiDate, todayStr } from '../lib/date'
+import { addDays, formatThaiDate } from '../lib/date'
 import { weekStart } from '../lib/stats'
 import { DOW, LEVELS, WEEK_PLANS, typeOf, weekDates, type Level, type PlanDay } from '../lib/exercise'
 import AddActivitySheet from './AddActivitySheet'
+import { useFollowToday, useToday } from '../lib/useToday'
 import ActivityList from './ActivityList'
 
 const matches = (plan: PlanDay, a: ActivityLog) => {
@@ -18,8 +19,8 @@ const matches = (plan: PlanDay, a: ActivityLog) => {
 }
 
 export default function Exercise({ profile }: { profile: Profile }) {
-  const today = todayStr()
-  const [ws, setWs] = useState(weekStart(today))
+  const today = useToday()
+  const [ws, setWs] = useFollowToday(today, weekStart)
   const [adding, setAdding] = useState(false)
   const level: Level = profile.exerciseLevel ?? 'beginner'
   const plan = WEEK_PLANS[level]

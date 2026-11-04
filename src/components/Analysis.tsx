@@ -2,13 +2,14 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Profile } from '../lib/db'
 import { calorieTarget, fmt1, fmtInt, latestWeight } from '../lib/calc'
-import { addDays, formatThaiDate, todayStr } from '../lib/date'
+import { addDays, formatThaiDate } from '../lib/date'
 import {
   dateRange, estimateRealTDEE, insights, mealShare, streak, summarizeDays, topFoods, weeklyRows,
 } from '../lib/stats'
 import { C, CalorieChart, WeightChart } from './Charts'
 import { useMeasuredBmr } from '../lib/body'
 import PlanCard from './PlanCard'
+import { useToday } from '../lib/useToday'
 import { useExerciseBonus } from '../lib/exercise'
 
 const RANGES = [
@@ -22,7 +23,7 @@ export default function Analysis({ profile }: { profile: Profile }) {
   const [range, setRange] = useState<(typeof RANGES)[number]['key']>(30)
   const weights = useLiveQuery(() => db.weights.toArray(), [])
   const entries = useLiveQuery(() => db.entries.toArray(), [])
-  const today = todayStr()
+  const today = useToday()
   const measured = useMeasuredBmr(profile)
   const bonus = useExerciseBonus(profile)
 

@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, MEALS, type Meal, type MealEntry, type Profile } from '../lib/db'
 import { calorieTarget, fmtInt, latestWeight } from '../lib/calc'
-import { addDays, formatThaiDate, todayStr } from '../lib/date'
+import { addDays, formatThaiDate } from '../lib/date'
+import { useFollowToday, useToday } from '../lib/useToday'
 import Ring from './Ring'
 import { useMeasuredBmr } from '../lib/body'
 import WeightCard from './WeightCard'
@@ -11,7 +12,8 @@ import AddActivitySheet from './AddActivitySheet'
 import ActivityList from './ActivityList'
 
 export default function Today({ profile }: { profile: Profile }) {
-  const [date, setDate] = useState(todayStr())
+  const today = useToday()
+  const [date, setDate] = useFollowToday(today, (t) => t)
   const [adding, setAdding] = useState<Meal | null>(null)
   const [addingAct, setAddingAct] = useState(false)
   const acts = useLiveQuery(() => db.activities.where('date').equals(date).sortBy('createdAt'), [date]) ?? []
@@ -25,7 +27,7 @@ export default function Today({ profile }: { profile: Profile }) {
   const target = base + (profile.addExercise ? burned : 0)
   const eaten = entries.reduce((s, e) => s + e.kcalPerUnit * e.qty, 0)
   const remaining = target - eaten
-  const isToday = date === todayStr()
+  const isToday = date === today
 
   return (
     <div className="px-4 pt-4">
@@ -37,7 +39,7 @@ export default function Today({ profile }: { profile: Profile }) {
           {isToday ? (
             <div className="text-xs text-slate-500">{formatThaiDate(date)}</div>
           ) : (
-            <button onClick={() => setDate(todayStr())} className="text-xs text-emerald-700 underline">กลับไปวันนี้</button>
+            <button onClick={() => setDate(today)} className="text-xs text-emerald-700 underline">กลับไปวันนี้</button>
           )}
         </div>
         <button
