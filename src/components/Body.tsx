@@ -271,7 +271,7 @@ function History({ list, onEdit }: { list: Derived[]; onEdit: (s: BodyScan) => v
   )
 }
 
-type FieldKey = Exclude<keyof BodyScan, 'id' | 'date' | 'device' | 'note'>
+type FieldKey = Exclude<keyof BodyScan, 'id' | 'uid' | 'date' | 'device' | 'note'>
 const FIELDS: { key: FieldKey; label: string; unit: string; req?: boolean; group: string }[] = [
   { key: 'weight', label: 'น้ำหนักรวม', unit: 'กก.', req: true, group: 'หลัก' },
   { key: 'fatPct', label: '% ไขมัน', unit: '%', req: true, group: 'หลัก' },

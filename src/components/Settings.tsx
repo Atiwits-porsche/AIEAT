@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, exportAll, importAll, type Profile } from '../lib/db'
+import { db, exportAll, type Profile } from '../lib/db'
 import { latestWeight } from '../lib/calc'
 import { todayStr } from '../lib/date'
 import ProfileForm from './ProfileForm'
+import { AccountCard } from './Account'
+import { importAndSync } from '../lib/sync'
 import { useMeasuredBmr } from '../lib/body'
 import { canPromptInstall, isIOS, isStandalone, onInstallChange, promptInstall } from '../lib/install'
 
@@ -27,7 +29,7 @@ export default function Settings({ profile }: { profile: Profile }) {
   async function doImport(file: File) {
     if (!confirm('นำเข้าข้อมูลจะ "แทนที่" ข้อมูลทั้งหมดในเครื่องนี้ ต้องการดำเนินการต่อหรือไม่?')) return
     try {
-      await importAll(JSON.parse(await file.text()))
+      await importAndSync(JSON.parse(await file.text()))
       setMsg('✅ นำเข้าข้อมูลเรียบร้อย')
     } catch (e) {
       setMsg(`❌ นำเข้าไม่สำเร็จ: ${e instanceof Error ? e.message : e}`)
@@ -37,6 +39,8 @@ export default function Settings({ profile }: { profile: Profile }) {
   return (
     <div className="space-y-4 px-4 pt-4">
       <h1 className="text-lg font-semibold">ตั้งค่า</h1>
+
+      <AccountCard />
 
       <section className="rounded-2xl bg-white p-4 shadow-sm">
         <h2 className="mb-3 font-semibold">โปรไฟล์และเป้าหมาย</h2>
@@ -77,7 +81,7 @@ export default function Settings({ profile }: { profile: Profile }) {
       <section className="rounded-2xl bg-white p-4 shadow-sm">
         <h2 className="font-semibold">สำรองข้อมูล</h2>
         <p className="mt-1 text-sm text-slate-500">
-          ข้อมูลทั้งหมดเก็บไว้ในเบราว์เซอร์ของเครื่องนี้เท่านั้น ควร export เก็บไว้เป็นระยะ หรือใช้ย้ายไปเครื่องใหม่
+          ดาวน์โหลดข้อมูลทั้งหมดเป็นไฟล์ไว้เป็นสำเนาสำรอง (ถ้ายังไม่ได้เข้าสู่ระบบ ข้อมูลอยู่ในเครื่องนี้เท่านั้น ควร export เป็นระยะ)
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button onClick={doExport} className="rounded-xl bg-emerald-600 py-2.5 font-semibold text-white">⬇️ Export</button>

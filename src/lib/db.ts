@@ -33,6 +33,8 @@ export interface WeightLog {
 
 export interface MealEntry {
   id?: number
+  /** id ถาวรสำหรับซิงก์ข้ามเครื่อง */
+  uid?: string
   date: string
   meal: Meal
   name: string
@@ -45,6 +47,8 @@ export interface MealEntry {
 /** ผลวัดจากเครื่องวัดองค์ประกอบร่างกาย (เช่น Tanita, InBody) */
 export interface BodyScan {
   id?: number
+  /** id ถาวรสำหรับซิงก์ข้ามเครื่อง */
+  uid?: string
   date: string
   device?: string
   weight: number
@@ -66,6 +70,8 @@ export interface BodyScan {
 
 export interface ActivityLog {
   id?: number
+  /** id ถาวรสำหรับซิงก์ข้ามเครื่อง */
+  uid?: string
   date: string
   type: string // key ใน ACTIVITY_TYPES
   name: string
@@ -76,10 +82,26 @@ export interface ActivityLog {
 
 export interface CustomFood {
   id?: number
+  /** id ถาวรสำหรับซิงก์ข้ามเครื่อง */
+  uid?: string
   name: string
   kcal: number
   unit: string
 }
+
+/** รายการที่รอส่งขึ้นคลาวด์ */
+export interface SyncItem {
+  id: string // `${kind}:${key}`
+  kind: string
+  key: string
+  deleted: boolean
+  at: number
+}
+
+export const newUid = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${Math.random().toString(36).slice(2, 10)}`
 
 class AieatDB extends Dexie {
   profile!: EntityTable<Profile, 'id'>
@@ -88,6 +110,7 @@ class AieatDB extends Dexie {
   customFoods!: EntityTable<CustomFood, 'id'>
   bodyScans!: EntityTable<BodyScan, 'id'>
   activities!: EntityTable<ActivityLog, 'id'>
+  syncQueue!: EntityTable<SyncItem, 'id'>
 
   constructor() {
     super('aieat')
@@ -99,6 +122,22 @@ class AieatDB extends Dexie {
     })
     this.version(2).stores({ bodyScans: '++id, date' })
     this.version(3).stores({ activities: '++id, date, createdAt' })
+    // v4: เพิ่ม uid ให้ทุกรายการ (ใช้ซิงก์ข้ามเครื่อง) + คิวรอส่งขึ้นคลาวด์
+    this.version(4)
+      .stores({
+        entries: '++id, date, createdAt, uid',
+        customFoods: '++id, name, uid',
+        bodyScans: '++id, date, uid',
+        activities: '++id, date, createdAt, uid',
+        syncQueue: 'id',
+      })
+      .upgrade(async (tx) => {
+        for (const t of ['entries', 'customFoods', 'bodyScans', 'activities']) {
+          await tx.table(t).toCollection().modify((o: { uid?: string }) => {
+            if (!o.uid) o.uid = newUid()
+          })
+        }
+      })
   }
 }
 
@@ -127,7 +166,8 @@ export async function importAll(data: unknown) {
   const d = data as Partial<Awaited<ReturnType<typeof exportAll>>>
   if (!d || d.app !== 'aieat') throw new Error('ไฟล์นี้ไม่ใช่ข้อมูลของ AIEAT')
   await db.transaction('rw', [db.profile, db.weights, db.entries, db.customFoods, db.bodyScans, db.activities], async () => {
-    await Promise.all([db.profile.clear(), db.weights.clear(), db.entries.clear(), db.customFoods.clear(), db.bodyScans.clear(), db.activities.clear()])
+    // ใช้ collection.delete() (ไม่ใช่ clear) เพื่อให้การลบถูกซิงก์ไปเครื่องอื่นด้วย
+    for (const t of [db.profile, db.weights, db.entries, db.customFoods, db.bodyScans, db.activities]) await t.toCollection().delete()
     await db.profile.bulkPut(d.profile ?? [])
     await db.weights.bulkPut(d.weights ?? [])
     await db.entries.bulkPut(d.entries ?? [])

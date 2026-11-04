@@ -7,6 +7,8 @@ import Analysis from './components/Analysis'
 import Body from './components/Body'
 import Exercise from './components/Exercise'
 import ProfileForm from './components/ProfileForm'
+import { AuthForm } from './components/Account'
+import { useSync } from './lib/sync'
 
 type Tab = 'today' | 'stats' | 'exercise' | 'body' | 'settings'
 
@@ -16,19 +18,7 @@ export default function App() {
 
   if (profile === null) return null // กำลังโหลด
 
-  if (!profile) {
-    return (
-      <div className="mx-auto max-w-lg px-4 pb-10 pt-8">
-        <h1 className="text-2xl font-bold text-emerald-700">ยินดีต้อนรับสู่ AIEAT 👋</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          กรอกข้อมูลด้านล่างเพื่อคำนวณว่าควรกินวันละกี่แคลอรี่จึงจะลดน้ำหนักได้ตามเป้า
-        </p>
-        <div className="mt-5">
-          <ProfileForm />
-        </div>
-      </div>
-    )
-  }
+  if (!profile) return <Welcome />
 
   return (
     <div className="mx-auto min-h-dvh max-w-lg pb-24">
@@ -62,6 +52,56 @@ export default function App() {
           ))}
         </div>
       </nav>
+    </div>
+  )
+}
+
+function Welcome() {
+  const sync = useSync()
+  const [login, setLogin] = useState(false)
+  const signedIn = sync.status !== 'signed-out' && !!sync.userId
+
+  return (
+    <div className="mx-auto max-w-lg px-4 pb-10 pt-8">
+      <h1 className="text-2xl font-bold text-emerald-700">ยินดีต้อนรับสู่ AIEAT 👋</h1>
+      {signedIn ? (
+        <div className="mt-4 rounded-2xl bg-white p-4 text-sm shadow-sm">
+          {sync.status === 'syncing' ? (
+            <p>🔄 กำลังดึงข้อมูลจากบัญชี {sync.email}…</p>
+          ) : sync.status === 'error' ? (
+            <p className="text-red-600">⚠️ ดึงข้อมูลไม่สำเร็จ: {sync.error}</p>
+          ) : (
+            <p>☁️ เข้าสู่ระบบด้วย {sync.email} แล้ว ยังไม่มีโปรไฟล์ในบัญชีนี้ — กรอกข้อมูลด้านล่างเพื่อเริ่มใช้งาน</p>
+          )}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
+          {login ? (
+            <>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="font-semibold">☁️ เข้าสู่ระบบ / สมัครสมาชิก</h2>
+                <button onClick={() => setLogin(false)} className="text-sm text-slate-500">ยกเลิก</button>
+              </div>
+              <AuthForm />
+            </>
+          ) : (
+            <button onClick={() => setLogin(true)} className="w-full text-left text-sm">
+              <span className="font-semibold text-emerald-700">มีบัญชีแล้ว? เข้าสู่ระบบ ›</span>
+              <span className="mt-0.5 block text-slate-500">ดึงข้อมูลเดิมกลับมา หรือสมัครเพื่อซิงก์หลายเครื่อง (ไม่บังคับ)</span>
+            </button>
+          )}
+        </div>
+      )}
+      {!(signedIn && sync.status === 'syncing') && (
+        <>
+          <p className="mt-5 text-sm text-slate-600">
+            กรอกข้อมูลด้านล่างเพื่อคำนวณว่าควรกินวันละกี่แคลอรี่จึงจะลดน้ำหนักได้ตามเป้า
+          </p>
+          <div className="mt-3">
+            <ProfileForm />
+          </div>
+        </>
+      )}
     </div>
   )
 }

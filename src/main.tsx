@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App'
 import './lib/install'
+import { startSync } from './lib/sync'
+
+startSync()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

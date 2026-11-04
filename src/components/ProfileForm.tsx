@@ -27,6 +27,8 @@ export default function ProfileForm({ profile, currentWeight, measured, onSaved 
 
   const draft: Profile | null = valid
     ? {
+        // เก็บค่าอื่นที่ตั้งจากหน้าอื่นไว้ (แผนเดือน ระดับออกกำลังกาย BMR เครื่องวัด ฯลฯ)
+        ...profile,
         id: 'me',
         sex,
         birthYear: new Date().getFullYear() - nAge,
@@ -36,7 +38,6 @@ export default function ProfileForm({ profile, currentWeight, measured, onSaved 
         activity,
         ratePerWeek: rate,
         createdAt: profile?.createdAt ?? todayStr(),
-        ...(profile?.useScanBmr ? { useScanBmr: true } : {}),
       }
     : null
 
