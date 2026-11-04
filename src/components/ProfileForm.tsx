@@ -37,6 +37,8 @@ export default function ProfileForm({ profile, currentWeight, measured, onSaved 
         goalWeight: nGoal,
         activity,
         ratePerWeek: rate,
+        // เปลี่ยนความเร็วเอง = ยกเลิกแผนรายเดือน
+        ...(profile && rate !== profile.ratePerWeek ? { planStartDate: undefined, planStartWeight: undefined, planMonths: undefined } : {}),
         createdAt: profile?.createdAt ?? todayStr(),
       }
     : null
@@ -111,6 +113,15 @@ export default function ProfileForm({ profile, currentWeight, measured, onSaved 
             </button>
           ))}
         </div>
+        {profile?.planMonths && (
+          rate === profile.ratePerWeek ? (
+            <p className="mt-1 text-[11px] text-emerald-700">
+              ตอนนี้ใช้แผน {profile.planMonths} เดือน ({profile.ratePerWeek} กก./สัปดาห์) — ปรับแผนได้ที่แท็บสถิติ · เลือกความเร็วด้านบนจะยกเลิกแผน
+            </p>
+          ) : (
+            <p className="mt-1 text-[11px] text-amber-700">บันทึกแล้วจะยกเลิกแผน {profile.planMonths} เดือน และใช้ความเร็ว {rate} กก./สัปดาห์แทน</p>
+          )
+        )}
       </div>
 
       {preview && (

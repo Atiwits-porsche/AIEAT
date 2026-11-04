@@ -3,7 +3,7 @@ import { db, type Profile, type WeightLog } from '../lib/db'
 import { avg7, calorieTarget, fmt1, fmtInt, minKcal, type MeasuredBmr } from '../lib/calc'
 import { addDays, formatThaiDate } from '../lib/date'
 import { dayIndex, dateRange } from '../lib/stats'
-import { currentWeight, getPlan, planAt, requiredRate, trendPerDay, type Plan } from '../lib/plan'
+import { addMonths, currentWeight, getPlan, planAt, requiredRate, trendPerDay, type Plan } from '../lib/plan'
 import { C, Legend, TipRow, Tooltip, niceTicks, useWidth } from './Charts'
 
 const MONTH_CHOICES = [3, 6, 9, 12]
@@ -14,31 +14,66 @@ export default function PlanCard({ profile, weights, today, measured }: {
   today: string
   measured?: MeasuredBmr
 }) {
-  const plan = getPlan(profile, weights)
+  const saved = getPlan(profile, weights)
   const current = currentWeight(profile, weights, today)
+  const [draft, setDraft] = useState<number | null>(null)
+
+  // แผนที่แสดง: ตัวอย่างที่กำลังเลือก หรือแผนที่ใช้อยู่
+  const previewing = draft !== null && !(saved.custom && saved.months === draft && saved.start === today)
+  const plan: Plan = previewing
+    ? { start: today, startWeight: Math.round(current * 10) / 10, end: addMonths(today, draft!), goal: profile.goalWeight, months: draft!, custom: true }
+    : saved
   const need = requiredRate(plan, current, today)
+  const applyRate = need !== undefined ? Math.min(1, Math.max(0.1, Math.round(need * 100) / 100)) : undefined
   const slope = trendPerDay(weights, today)
-  const planNow = planAt(plan, today)
-  const diff = current - planNow
+  const diff = current - planAt(plan, today)
   const reached = current <= profile.goalWeight
 
-  const t = calorieTarget({ ...profile, ratePerWeek: need ?? profile.ratePerWeek }, current, measured)
-  const floorHit = need !== undefined && t.tdee - (need * 7700) / 7 < minKcal(profile.sex)
+  // เป้าแคล: ตัวอย่าง = คำนวณจากความเร็วที่แผนต้องการ, แผนที่ใช้อยู่ = ค่าที่ทั้งแอปใช้จริง
+  const t = calorieTarget({ ...profile, ratePerWeek: previewing && applyRate ? applyRate : profile.ratePerWeek }, current, measured)
+  const floorHit = t.floored
+  const outOfSync = !previewing && plan.custom && applyRate !== undefined && Math.abs(applyRate - profile.ratePerWeek) > 0.02
 
-  // วันที่คาดว่าจะถึงเป้าตามแนวโน้มจริง
   const trendDays = slope !== undefined && slope < -0.005 ? Math.ceil((current - profile.goalWeight) / -slope) : undefined
   const trendDate = trendDays !== undefined && trendDays > 0 ? addDays(today, trendDays) : undefined
 
-  async function setMonths(m: number) {
-    await db.profile.update('me', { planStartDate: today, planStartWeight: Math.round(current * 10) / 10, planMonths: m })
+  async function applyPlan() {
+    if (draft === null || applyRate === undefined) return
+    await db.profile.update('me', {
+      planStartDate: today,
+      planStartWeight: Math.round(current * 10) / 10,
+      planMonths: draft,
+      ratePerWeek: applyRate,
+    })
+    setDraft(null)
   }
   async function resetPlan() {
     await db.profile.update('me', { planStartDate: undefined, planStartWeight: undefined, planMonths: undefined })
+    setDraft(null)
   }
+  const activeChip = draft ?? (saved.custom ? saved.months : null)
 
   return (
-    <section className="rounded-2xl bg-white p-4 shadow-sm">
+    <section className={`rounded-2xl bg-white p-4 shadow-sm ${previewing ? 'ring-2 ring-emerald-300' : ''}`}>
       <h2 className="mb-2 font-semibold">📈 แผนและแนวโน้มน้ำหนัก</h2>
+
+      {/* แผนที่ใช้อยู่ */}
+      <div className="mb-3 rounded-xl bg-slate-50 px-3 py-2 text-sm">
+        {saved.custom ? (
+          <>
+            <div className="font-medium">✅ ใช้แผน {saved.months} เดือนอยู่ · ลด {profile.ratePerWeek} กก./สัปดาห์</div>
+            <div className="text-xs text-slate-500">
+              เริ่ม {formatThaiDate(saved.start)} ({fmt1(saved.startWeight)} กก.) → ถึงเป้า {fmt1(saved.goal)} กก. {formatThaiDate(saved.end)} ·{' '}
+              <button onClick={resetPlan} className="underline">ยกเลิกแผน</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="font-medium">ยังไม่ได้ตั้งแผน · ใช้ความเร็ว {profile.ratePerWeek} กก./สัปดาห์จากโปรไฟล์</div>
+            <div className="text-xs text-slate-500">คาดว่าถึงเป้าประมาณ {formatThaiDate(saved.end)} ({saved.months} เดือน) — เลือกจำนวนเดือนด้านล่างเพื่อตั้งแผน</div>
+          </>
+        )}
+      </div>
 
       {/* เลือกระยะเวลาแผน */}
       <div className="text-xs text-slate-500">ลดจาก {fmt1(current)} → {fmt1(profile.goalWeight)} กก. ภายใน</div>
@@ -46,29 +81,30 @@ export default function PlanCard({ profile, weights, today, measured }: {
         {MONTH_CHOICES.map((m) => (
           <button
             key={m}
-            onClick={() => setMonths(m)}
-            className={`rounded-full border px-3 py-1 text-sm ${plan.custom && plan.months === m ? 'border-emerald-500 bg-emerald-50 font-semibold text-emerald-700' : 'border-slate-200 text-slate-600'}`}
+            onClick={() => setDraft(m)}
+            className={`rounded-full border px-3 py-1 text-sm ${activeChip === m ? 'border-emerald-500 bg-emerald-50 font-semibold text-emerald-700' : 'border-slate-200 text-slate-600'}`}
           >{m} เดือน</button>
         ))}
-        <CustomMonths active={plan.custom && !MONTH_CHOICES.includes(plan.months) ? plan.months : undefined} onSet={setMonths} />
+        <CustomMonths active={activeChip !== null && !MONTH_CHOICES.includes(activeChip) ? activeChip : undefined} onSet={setDraft} />
       </div>
-      <p className="mt-1 text-[11px] text-slate-400">
-        {plan.custom
-          ? <>แผนเริ่ม {formatThaiDate(plan.start)} ({fmt1(plan.startWeight)} กก.) · ครบกำหนด {formatThaiDate(plan.end)} · <button onClick={resetPlan} className="underline">ใช้ตามความเร็วในโปรไฟล์</button></>
-          : <>ตอนนี้ใช้แผนตามความเร็ว {profile.ratePerWeek} กก./สัปดาห์ในโปรไฟล์ ({plan.months} เดือน ถึง {formatThaiDate(plan.end)}) — เลือกจำนวนเดือนเพื่อตั้งแผนใหม่</>}
-      </p>
+
+      {previewing && <p className="mt-2 text-xs font-medium text-emerald-700">👀 ตัวอย่างแผน {draft} เดือน (ยังไม่ได้ใช้) — กด “ใช้แผนนี้” ด้านล่างเพื่อเริ่มใช้</p>}
 
       {/* สรุปแผน */}
       {!reached && need !== undefined && (
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-          <Stat label="ต้องลด" value={`${fmt1(need)}`} unit="กก./สัปดาห์" tone={need > 1 ? 'bad' : need > 0.75 ? 'warn' : undefined} />
-          <Stat label="กินวันละ" value={fmtInt(t.target)} unit="kcal" tone={floorHit ? 'warn' : undefined} />
-          <Stat
-            label="เทียบแผนวันนี้"
-            value={Math.abs(diff) < 0.3 ? 'ตามแผน' : `${diff > 0 ? '+' : ''}${fmt1(diff)}`}
-            unit={Math.abs(diff) < 0.3 ? '✓' : diff > 0 ? 'กก. ช้ากว่าแผน' : 'กก. เร็วกว่าแผน'}
-            tone={Math.abs(diff) < 0.3 || diff < 0 ? 'good' : 'warn'}
-          />
+          <Stat label="ต้องลด" value={need.toFixed(2)} unit="กก./สัปดาห์" tone={need > 1 ? 'bad' : need > 0.75 ? 'warn' : undefined} />
+          <Stat label={previewing ? 'จะกินวันละ' : 'กินวันละ (ตอนนี้)'} value={fmtInt(t.target)} unit="kcal" tone={floorHit ? 'warn' : undefined} />
+          {previewing ? (
+            <Stat label="ถึงเป้า" value={formatThaiDate(plan.end).replace(/^\S+\s/, '')} unit={`${plan.months} เดือน`} />
+          ) : (
+            <Stat
+              label="เทียบแผนวันนี้"
+              value={Math.abs(diff) < 0.3 ? 'ตามแผน' : `${diff > 0 ? '+' : ''}${fmt1(diff)}`}
+              unit={Math.abs(diff) < 0.3 ? '✓' : diff > 0 ? 'กก. ช้ากว่าแผน' : 'กก. เร็วกว่าแผน'}
+              tone={Math.abs(diff) < 0.3 || diff < 0 ? 'good' : 'warn'}
+            />
+          )}
         </div>
       )}
       {reached && <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">🎉 ถึงน้ำหนักเป้าหมายแล้ว ตั้งเป้าใหม่ได้ในหน้าตั้งค่า</p>}
@@ -76,19 +112,31 @@ export default function PlanCard({ profile, weights, today, measured }: {
         <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">แผนนี้ครบกำหนดแล้วแต่ยังไม่ถึงเป้า เลือกจำนวนเดือนเพื่อตั้งแผนใหม่</p>
       )}
       {need !== undefined && need > 1 && (
-        <p className="mt-2 text-xs text-red-600">⚠️ เร็วเกินไป — แนะนำไม่เกิน 0.5–1 กก./สัปดาห์ เพื่อไม่ให้เสียกล้ามเนื้อ ลองเพิ่มจำนวนเดือน</p>
+        <p className="mt-2 text-xs text-red-600">⚠️ เร็วเกินไป (เกิน 1 กก./สัปดาห์) — ถ้าใช้แผนนี้ เป้าแคลจะคิดที่ 1 กก./สัปดาห์ ซึ่งอาจไม่ทันกำหนด แนะนำเพิ่มจำนวนเดือน</p>
       )}
-      {floorHit && need !== undefined && need <= 1 && (
+      {floorHit && need !== undefined && (
         <p className="mt-2 text-xs text-amber-700">
           เป้าแคลติดขั้นต่ำ {fmtInt(minKcal(profile.sex))} kcal — ลดด้วยการกินอย่างเดียวอาจไม่ทัน ควรเพิ่มการออกกำลังกาย หรือขยายเวลาแผน
         </p>
       )}
-      {need !== undefined && Math.abs(need - profile.ratePerWeek) > 0.02 && need <= 1 && !reached && (
+
+      {previewing && !reached && applyRate !== undefined && (
+        <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+          <button onClick={applyPlan} className="rounded-xl bg-emerald-600 py-2.5 font-semibold text-white">
+            ✅ ใช้แผน {draft} เดือนนี้
+          </button>
+          <button onClick={() => setDraft(null)} className="rounded-xl border border-slate-300 px-4 text-sm text-slate-600">ยกเลิก</button>
+          <p className="col-span-2 text-[11px] text-slate-500">
+            จะตั้งความเร็วเป็น {applyRate} กก./สัปดาห์ และเป้าแคลวันละ {fmtInt(t.target)} kcal ทั้งแอป (หน้าบันทึก สถิติ และตั้งค่า)
+          </p>
+        </div>
+      )}
+      {outOfSync && !reached && (
         <button
-          onClick={() => db.profile.update('me', { ratePerWeek: Math.max(0.1, Math.round(need * 100) / 100) })}
+          onClick={() => db.profile.update('me', { ratePerWeek: applyRate })}
           className="mt-2 w-full rounded-xl border border-emerald-300 py-2 text-sm font-medium text-emerald-700"
         >
-          ใช้ {fmt1(need)} กก./สัปดาห์ คำนวณเป้าแคลรายวัน (ตอนนี้ {profile.ratePerWeek})
+          🔄 ปรับเป้าแคลให้ทันแผน: ต้องลด {applyRate} กก./สัปดาห์ (ตอนนี้ตั้งไว้ {profile.ratePerWeek})
         </button>
       )}
 

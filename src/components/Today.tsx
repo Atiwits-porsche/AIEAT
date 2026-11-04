@@ -6,6 +6,7 @@ import { addDays, formatThaiDate } from '../lib/date'
 import { useFollowToday, useToday } from '../lib/useToday'
 import Ring from './Ring'
 import { useSync } from '../lib/sync'
+import { addMonths } from '../lib/plan'
 import { useMeasuredBmr } from '../lib/body'
 import WeightCard from './WeightCard'
 import AddFoodSheet from './AddFoodSheet'
@@ -67,6 +68,9 @@ export default function Today({ profile, onOpenAccount }: { profile: Profile; on
           <Stat label="เป้าหมาย" value={`${fmtInt(target)} kcal`} />
           {profile.addExercise && burned > 0 && <Stat label="รวมออกกำลังกาย" value={`+${fmtInt(burned)}`} />}
           <Stat label="กินไปแล้ว" value={`${fmtInt(eaten)} kcal`} />
+          {profile.planMonths && profile.planStartDate && (
+            <div className="text-[11px] text-emerald-700">🎯 แผน {profile.planMonths} เดือน · ถึงเป้า {formatThaiDate(addMonths(profile.planStartDate, profile.planMonths))}</div>
+          )}
           <div className="space-y-1 pt-1">
             {MEALS.map((m) => {
               const k = entries.filter((e) => e.meal === m.key).reduce((s, e) => s + e.kcalPerUnit * e.qty, 0)
