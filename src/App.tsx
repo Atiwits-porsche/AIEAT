@@ -3,9 +3,10 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from './lib/db'
 import Today from './components/Today'
 import Settings from './components/Settings'
+import Analysis from './components/Analysis'
 import ProfileForm from './components/ProfileForm'
 
-type Tab = 'today' | 'settings'
+type Tab = 'today' | 'stats' | 'settings'
 
 export default function App() {
   const profile = useLiveQuery(() => db.profile.get('me'), [], null)
@@ -29,13 +30,16 @@ export default function App() {
 
   return (
     <div className="mx-auto min-h-dvh max-w-lg pb-24">
-      {tab === 'today' ? <Today profile={profile} /> : <Settings profile={profile} />}
+      {tab === 'today' && <Today profile={profile} />}
+      {tab === 'stats' && <Analysis profile={profile} />}
+      {tab === 'settings' && <Settings profile={profile} />}
 
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
         <div className="mx-auto flex max-w-lg">
           {(
             [
               ['today', '📋', 'บันทึก'],
+              ['stats', '📊', 'สถิติ'],
               ['settings', '⚙️', 'ตั้งค่า'],
             ] as const
           ).map(([key, icon, label]) => (

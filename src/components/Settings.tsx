@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, exportAll, importAll, type Profile } from '../lib/db'
 import { latestWeight } from '../lib/calc'
 import { todayStr } from '../lib/date'
 import ProfileForm from './ProfileForm'
+import { canPromptInstall, isIOS, isStandalone, onInstallChange, promptInstall } from '../lib/install'
 
 export default function Settings({ profile }: { profile: Profile }) {
   const weights = useLiveQuery(() => db.weights.toArray(), []) ?? []
@@ -68,6 +69,8 @@ export default function Settings({ profile }: { profile: Profile }) {
         )}
       </section>
 
+      <InstallCard />
+
       <section className="rounded-2xl bg-white p-4 shadow-sm">
         <h2 className="font-semibold">สำรองข้อมูล</h2>
         <p className="mt-1 text-sm text-slate-500">
@@ -90,5 +93,28 @@ export default function Settings({ profile }: { profile: Profile }) {
         />
       </section>
     </div>
+  )
+}
+
+function InstallCard() {
+  const [can, setCan] = useState(canPromptInstall())
+  useEffect(() => onInstallChange(() => setCan(canPromptInstall())), [])
+  if (isStandalone()) return null
+  return (
+    <section className="rounded-2xl bg-white p-4 shadow-sm">
+      <h2 className="font-semibold">📲 ติดตั้งเป็นแอปบนมือถือ</h2>
+      <p className="mt-1 text-sm text-slate-500">เปิดจากหน้าจอโฮมได้เหมือนแอปทั่วไป และใช้งานได้แม้ไม่มีอินเทอร์เน็ต</p>
+      {can ? (
+        <button onClick={promptInstall} className="mt-3 w-full rounded-xl bg-emerald-600 py-2.5 font-semibold text-white">ติดตั้งแอป</button>
+      ) : isIOS() ? (
+        <p className="mt-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+          บน iPhone/iPad: เปิดใน <b>Safari</b> → กดปุ่ม <b>แชร์</b> (สี่เหลี่ยมมีลูกศรขึ้น) → เลือก <b>“เพิ่มไปยังหน้าจอโฮม”</b>
+        </p>
+      ) : (
+        <p className="mt-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+          บน Android/Chrome: กดเมนู <b>⋮</b> มุมขวาบน → <b>“ติดตั้งแอป”</b> หรือ <b>“เพิ่มลงในหน้าจอหลัก”</b>
+        </p>
+      )}
+    </section>
   )
 }
