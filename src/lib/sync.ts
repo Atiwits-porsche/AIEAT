@@ -304,7 +304,7 @@ function errText(e: unknown): string {
   if (/already registered|already been registered/i.test(m)) return 'อีเมลนี้สมัครแล้ว — ลองเข้าสู่ระบบ'
   if (/Password should be at least/i.test(m)) return 'รหัสผ่านต้องยาวอย่างน้อย 6 ตัวอักษร'
   if (/rate limit|too many/i.test(m)) return 'ส่งคำขอบ่อยเกินไป รอสักครู่แล้วลองใหม่'
-  if (/relation .*records.* does not exist|Could not find the table/i.test(m)) return 'ยังไม่ได้สร้างตารางใน Supabase — รันไฟล์ supabase/schema.sql ใน SQL Editor ก่อน'
+  if (/relation .*records.* does not exist|Could not find the table/i.test(m)) return 'ยังไม่ได้สร้างตารางใน Supabase — รันไฟล์ใน supabase/migrations ใน SQL Editor ก่อน'
   if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้'
   return m
 }

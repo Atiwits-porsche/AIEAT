@@ -49,7 +49,7 @@
 - Row Level Security: ผู้ใช้แต่ละคนอ่านและเขียนได้เฉพาะข้อมูลของตัวเอง
 
 **ตั้งค่า Supabase (ครั้งเดียว)**
-1. Supabase → SQL Editor → New query → วางเนื้อหาจาก [`supabase/schema.sql`](supabase/schema.sql) → Run
+1. สร้างตาราง: GitHub integration ของ Supabase (เปิด Deploy to production, branch `main`) รัน [`supabase/migrations/`](supabase/migrations) ให้เองเมื่อ push เข้า `main` — หรือคัดลอกไฟล์ migration ไปวางใน SQL Editor แล้ว Run
 2. Authentication → URL Configuration → Site URL = `https://atiwits-porsche.github.io/AIEAT/` และเพิ่ม URL เดียวกันใน Redirect URLs
 
 ## รันบนเครื่อง

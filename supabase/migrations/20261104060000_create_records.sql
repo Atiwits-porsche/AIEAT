@@ -1,4 +1,6 @@
--- AIEAT: ตารางเก็บข้อมูลผู้ใช้ (รันครั้งเดียวใน Supabase → SQL Editor → New query → Run)
+-- AIEAT: ตารางเก็บข้อมูลผู้ใช้
+-- ใช้ได้ 2 แบบ: (1) GitHub integration ของ Supabase รัน migration นี้ให้อัตโนมัติเมื่อ push เข้า main
+--               (2) คัดลอกไปวางใน Supabase → SQL Editor → New query → Run (รันซ้ำได้ ไม่เสียหาย)
 -- ทุกข้อมูล (โปรไฟล์ น้ำหนัก อาหาร ผลวัด ออกกำลังกาย) เก็บในตารางเดียว แยกด้วย kind + key
 -- Row Level Security: ผู้ใช้แต่ละคนอ่าน/เขียนได้เฉพาะแถวของตัวเอง
 
