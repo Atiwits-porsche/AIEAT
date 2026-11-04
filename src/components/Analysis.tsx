@@ -7,6 +7,7 @@ import {
   dateRange, estimateRealTDEE, insights, mealShare, projectGoal, streak, summarizeDays, topFoods, weeklyRows,
 } from '../lib/stats'
 import { C, CalorieChart, WeightChart } from './Charts'
+import { useMeasuredBmr } from '../lib/body'
 
 const RANGES = [
   { key: 7, label: '7 วัน' },
@@ -20,6 +21,7 @@ export default function Analysis({ profile }: { profile: Profile }) {
   const weights = useLiveQuery(() => db.weights.toArray(), [])
   const entries = useLiveQuery(() => db.entries.toArray(), [])
   const today = todayStr()
+  const measured = useMeasuredBmr(profile)
 
   const data = useMemo(() => {
     if (!weights || !entries) return null
@@ -29,7 +31,7 @@ export default function Analysis({ profile }: { profile: Profile }) {
       const all = [profile.createdAt, ...weights.map((w) => w.date), ...entries.map((e) => e.date)].sort()
       from = all[0] < today ? all[0] : addDays(today, -6)
     }
-    const days = summarizeDays(profile, weights, entries, dateRange(from, today))
+    const days = summarizeDays(profile, weights, entries, dateRange(from, today), measured)
     const inRange = entries.filter((e) => e.date >= from && e.date <= today)
     const complete = days.filter((d) => d.logged && d.date !== today)
     const completeSet = new Set(complete.map((d) => d.date))
@@ -50,9 +52,9 @@ export default function Analysis({ profile }: { profile: Profile }) {
       streak: streak(weights, entries, today),
       proj: projectGoal(profile, weights, today),
       real: estimateRealTDEE(weights, entries, today),
-      formula: calorieTarget(profile, latestWeight(weights, today) ?? profile.startWeight),
+      formula: calorieTarget(profile, latestWeight(weights, today) ?? profile.startWeight, measured),
     }
-  }, [weights, entries, range, profile, today])
+  }, [weights, entries, range, profile, today, measured?.kcal, measured?.weight])
 
   if (!data) return null
   const { proj } = data
@@ -118,7 +120,7 @@ export default function Analysis({ profile }: { profile: Profile }) {
           <>
             <div className="flex items-baseline gap-3">
               <span className="text-2xl font-bold">{fmtInt(data.real.tdee)} kcal</span>
-              <span className="text-sm text-slate-500">สูตรคำนวณ {fmtInt(data.formula.tdee)}</span>
+              <span className="text-sm text-slate-500">{data.formula.bmrSource === 'measured' ? 'จาก BMR เครื่องวัด' : 'สูตรคำนวณ'} {fmtInt(data.formula.tdee)}</span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
               ประเมินจากแคลที่กินเฉลี่ย {fmtInt(data.real.avgKcal)} kcal ({data.real.loggedDays} วัน) และแนวโน้มน้ำหนัก 28 วัน

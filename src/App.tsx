@@ -4,9 +4,10 @@ import { db } from './lib/db'
 import Today from './components/Today'
 import Settings from './components/Settings'
 import Analysis from './components/Analysis'
+import Body from './components/Body'
 import ProfileForm from './components/ProfileForm'
 
-type Tab = 'today' | 'stats' | 'settings'
+type Tab = 'today' | 'stats' | 'body' | 'settings'
 
 export default function App() {
   const profile = useLiveQuery(() => db.profile.get('me'), [], null)
@@ -32,6 +33,7 @@ export default function App() {
     <div className="mx-auto min-h-dvh max-w-lg pb-24">
       {tab === 'today' && <Today profile={profile} />}
       {tab === 'stats' && <Analysis profile={profile} />}
+      {tab === 'body' && <Body profile={profile} />}
       {tab === 'settings' && <Settings profile={profile} />}
 
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
@@ -40,6 +42,7 @@ export default function App() {
             [
               ['today', '📋', 'บันทึก'],
               ['stats', '📊', 'สถิติ'],
+              ['body', '🧬', 'ร่างกาย'],
               ['settings', '⚙️', 'ตั้งค่า'],
             ] as const
           ).map(([key, icon, label]) => (

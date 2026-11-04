@@ -1,6 +1,6 @@
 import type { MealEntry, Profile, WeightLog, Meal } from './db'
 import { MEALS } from './db'
-import { KCAL_PER_KG, avg7, calorieTarget, latestWeight } from './calc'
+import { KCAL_PER_KG, avg7, calorieTarget, latestWeight, type MeasuredBmr } from './calc'
 import { addDays } from './date'
 
 export const dayIndex = (date: string) => {
@@ -89,7 +89,7 @@ export interface DaySummary {
   avg7?: number
 }
 
-export function summarizeDays(profile: Profile, weights: WeightLog[], entries: MealEntry[], dates: string[]): DaySummary[] {
+export function summarizeDays(profile: Profile, weights: WeightLog[], entries: MealEntry[], dates: string[], measured?: MeasuredBmr): DaySummary[] {
   const kcal = kcalByDate(entries)
   const byDate = new Map(weights.map((w) => [w.date, w]))
   return dates.map((date) => {
@@ -99,7 +99,7 @@ export function summarizeDays(profile: Profile, weights: WeightLog[], entries: M
       date,
       kcal: kcal.get(date) ?? 0,
       logged: kcal.has(date),
-      target: calorieTarget(profile, weight).target,
+      target: calorieTarget(profile, weight, measured).target,
       morning: w?.morningKg,
       evening: w?.eveningKg,
       avg7: avg7(weights, date, addDays)?.value,

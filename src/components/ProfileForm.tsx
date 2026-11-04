@@ -2,13 +2,15 @@ import { useState } from 'react'
 import { db, type Activity, type Profile, type Sex } from '../lib/db'
 import { ACTIVITY, RATES, ageOf, bmi, bmiLabel, calorieTarget, fmt1, fmtInt, KCAL_PER_KG } from '../lib/calc'
 import { todayStr } from '../lib/date'
+import type { MeasuredBmr } from '../lib/calc'
 
 const input =
   'w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-base outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100'
 
-export default function ProfileForm({ profile, currentWeight, onSaved }: {
+export default function ProfileForm({ profile, currentWeight, measured, onSaved }: {
   profile?: Profile
   currentWeight?: number
+  measured?: MeasuredBmr
   onSaved?: () => void
 }) {
   const [sex, setSex] = useState<Sex>(profile?.sex ?? 'female')
@@ -34,11 +36,12 @@ export default function ProfileForm({ profile, currentWeight, onSaved }: {
         activity,
         ratePerWeek: rate,
         createdAt: profile?.createdAt ?? todayStr(),
+        ...(profile?.useScanBmr ? { useScanBmr: true } : {}),
       }
     : null
 
   const calcWeight = currentWeight ?? nStart
-  const preview = draft ? calorieTarget(draft, calcWeight) : null
+  const preview = draft ? calorieTarget(draft, calcWeight, measured) : null
   // ใช้ส่วนต่างแคลจริง (กรณีเป้าถูกปัดขึ้นเป็นขั้นต่ำ จะลดช้ากว่าที่เลือก)
   const realDeficit = preview ? preview.tdee - preview.target : 0
   const weeks = preview && calcWeight > nGoal && realDeficit > 0 ? ((calcWeight - nGoal) * KCAL_PER_KG) / (realDeficit * 7) : 0
@@ -116,7 +119,7 @@ export default function ProfileForm({ profile, currentWeight, onSaved }: {
             <span className="text-2xl font-bold text-emerald-700">{fmtInt(preview.target)} kcal</span>
           </div>
           <ul className="mt-2 space-y-0.5 text-xs text-slate-600">
-            <li>BMR (พลังงานที่ร่างกายใช้ขณะพัก): {fmtInt(preview.bmr)} kcal</li>
+            <li>BMR (พลังงานที่ร่างกายใช้ขณะพัก): {fmtInt(preview.bmr)} kcal{preview.bmrSource === 'measured' && ' (จากเครื่องวัด)'}</li>
             <li>TDEE (พลังงานที่ใช้ทั้งวัน): {fmtInt(preview.tdee)} kcal</li>
             <li>กินน้อยกว่า TDEE วันละ {fmtInt(realDeficit)} kcal (ไขมัน 1 กก. ≈ {fmtInt(KCAL_PER_KG)} kcal)</li>
             <li>BMI ตอนนี้: {fmt1(bmi(calcWeight, nHeight))} ({bmiLabel(bmi(calcWeight, nHeight))})</li>

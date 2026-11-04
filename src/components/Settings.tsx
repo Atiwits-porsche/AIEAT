@@ -4,12 +4,14 @@ import { db, exportAll, importAll, type Profile } from '../lib/db'
 import { latestWeight } from '../lib/calc'
 import { todayStr } from '../lib/date'
 import ProfileForm from './ProfileForm'
+import { useMeasuredBmr } from '../lib/body'
 import { canPromptInstall, isIOS, isStandalone, onInstallChange, promptInstall } from '../lib/install'
 
 export default function Settings({ profile }: { profile: Profile }) {
   const weights = useLiveQuery(() => db.weights.toArray(), []) ?? []
   const custom = useLiveQuery(() => db.customFoods.toArray(), []) ?? []
   const [msg, setMsg] = useState('')
+  const measured = useMeasuredBmr(profile)
   const fileRef = useRef<HTMLInputElement>(null)
 
   async function doExport() {
@@ -42,6 +44,7 @@ export default function Settings({ profile }: { profile: Profile }) {
           key={JSON.stringify(profile)}
           profile={profile}
           currentWeight={latestWeight(weights, todayStr())}
+          measured={measured}
           onSaved={() => setMsg('✅ บันทึกโปรไฟล์แล้ว')}
         />
         <p className="mt-2 text-[11px] text-slate-400">เป้าแคลอรี่คำนวณจากน้ำหนักล่าสุดที่บันทึกไว้ และจะปรับลดลงเองเมื่อน้ำหนักลดลง</p>

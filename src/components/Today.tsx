@@ -4,6 +4,7 @@ import { db, MEALS, type Meal, type MealEntry, type Profile } from '../lib/db'
 import { calorieTarget, fmtInt, latestWeight } from '../lib/calc'
 import { addDays, formatThaiDate, todayStr } from '../lib/date'
 import Ring from './Ring'
+import { useMeasuredBmr } from '../lib/body'
 import WeightCard from './WeightCard'
 import AddFoodSheet from './AddFoodSheet'
 
@@ -12,9 +13,10 @@ export default function Today({ profile }: { profile: Profile }) {
   const [adding, setAdding] = useState<Meal | null>(null)
   const entries = useLiveQuery(() => db.entries.where('date').equals(date).sortBy('createdAt'), [date]) ?? []
   const weights = useLiveQuery(() => db.weights.toArray(), []) ?? []
+  const measured = useMeasuredBmr(profile)
 
   const weight = latestWeight(weights, date) ?? profile.startWeight
-  const { target } = calorieTarget(profile, weight)
+  const { target } = calorieTarget(profile, weight, measured)
   const eaten = entries.reduce((s, e) => s + e.kcalPerUnit * e.qty, 0)
   const remaining = target - eaten
   const isToday = date === todayStr()
