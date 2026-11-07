@@ -93,29 +93,77 @@ export interface Limits extends Nutrients {
   refWeight: number
   /** ใช้น้ำหนักอ้างอิงแทนน้ำหนักจริง (BMI ≥ 30) */
   adjusted: boolean
+  /** เป้าแคลของแผนที่ใช้คิดไขมัน/น้ำตาล */
+  kcal: number
+  /** น้ำตาลถูกลดจาก 24 g ตามเป้าแคล (5% ของพลังงาน) */
+  sugarScaled: boolean
+  /** โปรตีนกี่กรัมต่อ กก. */
+  proteinPerKg: number
+  /** เหตุผลที่เพิ่มโปรตีน (ถ้ามี) */
+  proteinBoost?: string
 }
 
 export const FAT_PCT = 0.3
+export const SUGAR_PCT = 0.05
 export const PROTEIN_G_PER_KG = 1.2
+export const PROTEIN_G_PER_KG_BOOST = 1.4
 export const PROTEIN_G_PER_KG_HIGH = 1.6
+export const FAST_RATE = 0.7
 export const SUGAR_LIMIT_G = 24
 export const SODIUM_LIMIT_MG = 2000
 
+/**
+ * เกณฑ์ต่อวัน ผูกกับแผนลดน้ำหนัก
+ * - ไขมัน: 30% ของเป้าแคล → แผนยิ่งเร่ง เป้าแคลยิ่งต่ำ โควตายิ่งลด
+ * - น้ำตาล: ค่าที่ต่ำกว่าระหว่าง 24 g กับ 5% ของเป้าแคล (WHO แนะนำ < 5% ของพลังงาน)
+ * - โซเดียม: คงที่ 2,000 มก. — ไม่มีแคลอรี่ ไม่ได้ทำให้ไขมันลดเร็วขึ้น แต่ทำให้บวมน้ำ
+ * - โปรตีน: 1.2 g/กก. · แผนเร่ง (≥ 0.7 กก./สัปดาห์) หรือนับแคลออกกำลังกาย → 1.4 g/กก. เพื่อรักษากล้ามเนื้อ
+ */
 export function dailyLimits(p: Profile, weight: number, targetKcal: number): Limits {
   const h = p.heightCm / 100
   const bmi = weight / (h * h)
   // คนที่ BMI สูงมาก คิดโปรตีนจากน้ำหนักจริงจะสูงเกินความจำเป็น → ใช้น้ำหนักเป้าหมาย/น้ำหนักที่ BMI 25 แทน
   const adjusted = bmi >= 30
   const refWeight = adjusted ? Math.max(p.goalWeight, 25 * h * h) : weight
+  const sugarByKcal = Math.round((targetKcal * SUGAR_PCT) / 4)
+  const proteinBoost =
+    p.ratePerWeek >= FAST_RATE ? `แผนเร่ง ${p.ratePerWeek} กก./สัปดาห์` : p.addExercise ? 'ออกกำลังกายและนับแคลคืน' : undefined
+  const proteinPerKg = proteinBoost ? PROTEIN_G_PER_KG_BOOST : PROTEIN_G_PER_KG
   return {
-    sugar: SUGAR_LIMIT_G,
+    sugar: Math.min(SUGAR_LIMIT_G, sugarByKcal),
     fat: Math.round((targetKcal * FAT_PCT) / 9),
     sodium: SODIUM_LIMIT_MG,
-    protein: Math.round(refWeight * PROTEIN_G_PER_KG),
+    protein: Math.round(refWeight * proteinPerKg),
     proteinHigh: Math.round(refWeight * PROTEIN_G_PER_KG_HIGH),
     refWeight,
     adjusted,
+    kcal: targetKcal,
+    sugarScaled: sugarByKcal < SUGAR_LIMIT_G,
+    proteinPerKg,
+    proteinBoost,
   }
+}
+
+/**
+ * โซเดียมกับน้ำหนักเช้าวันถัดไป: เทียบวันที่โซเดียมเกินเกณฑ์กับวันปกติ
+ * คืนค่าเมื่อมีข้อมูลพอ (แต่ละกลุ่ม ≥ 2 คู่วัน)
+ */
+export function sodiumWaterEffect(
+  days: { date: string; morning?: number }[], sums: Map<string, NutSum>, limit: number,
+) {
+  const morning = new Map(days.filter((d) => d.morning).map((d) => [d.date, d.morning!]))
+  const high: number[] = []
+  const normal: number[] = []
+  for (const [date, s] of sums) {
+    if (!s.count) continue
+    const w0 = morning.get(date)
+    const w1 = morning.get(addDays(date, 1))
+    if (w0 === undefined || w1 === undefined) continue
+    ;(s.total.sodium > limit ? high : normal).push(w1 - w0)
+  }
+  if (high.length < 2 || normal.length < 2) return undefined
+  const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
+  return { highDays: high.length, highAvg: avg(high), normalAvg: avg(normal) }
 }
 
 /** ที่มาของเกณฑ์ — ค่าจากหลายหน่วยงาน แล้วใช้ค่ากลาง */
@@ -126,7 +174,7 @@ export const GUIDES: Record<NutKey, { sources: [string, string][]; chosen: strin
       ['กรมอนามัย กระทรวงสาธารณสุข', 'ไม่เกิน 6 ช้อนชา ≈ 24 g'],
       ['American Heart Association', 'ผู้หญิง ≤ 25 g · ผู้ชาย ≤ 36 g'],
     ],
-    chosen: 'ค่ากลาง ≈ 24–25 g → ใช้ 24 g (6 ช้อนชา) ต่อวัน',
+    chosen: 'ค่ากลาง ≈ 24–25 g → ใช้ 24 g (6 ช้อนชา) ต่อวัน หรือ 5% ของเป้าแคลถ้าน้อยกว่า (ช่วงลดน้ำหนักกินแคลน้อยลง น้ำตาลก็ควรลดตามสัดส่วน)',
     note: 'นับเฉพาะน้ำตาลที่เติม น้ำเชื่อม น้ำผึ้ง และน้ำผลไม้ (ไม่นับน้ำตาลในผลไม้สดทั้งผลและนมจืด)',
   },
   fat: {
@@ -146,8 +194,8 @@ export const GUIDES: Record<NutKey, { sources: [string, string][]; chosen: strin
       ['American Heart Association', 'ควร ≤ 1,500 มก. · ไม่เกิน 2,300 มก.'],
       ['Dietary Guidelines for Americans', '< 2,300 มก.'],
     ],
-    chosen: 'ค่ากลาง = 2,000 มก. ต่อวัน (≈ เกลือ 1 ช้อนชา)',
-    note: 'คนไทยกินโซเดียมเฉลี่ย ~3,600–4,000 มก./วัน ส่วนใหญ่มาจากน้ำปลา ซีอิ๊ว ผงปรุงรส น้ำซุป',
+    chosen: 'ค่ากลาง = 2,000 มก. ต่อวัน (≈ เกลือ 1 ช้อนชา) — ไม่ผูกกับแผน เพราะโซเดียมไม่มีแคลอรี่',
+    note: 'คนไทยกินโซเดียมเฉลี่ย ~3,600–4,000 มก./วัน ส่วนใหญ่มาจากน้ำปลา ซีอิ๊ว ผงปรุงรส น้ำซุป · วันที่กินเค็มทำให้ร่างกายเก็บน้ำ น้ำหนักเช้าวันรุ่งขึ้นขึ้นได้ 0.5–1 กก. แล้วลงเองใน 2–3 วัน ไม่ใช่ไขมัน',
   },
   protein: {
     sources: [
@@ -156,7 +204,7 @@ export const GUIDES: Record<NutKey, { sources: [string, string][]; chosen: strin
       ['งานทบทวนปี 2024', '1.0–1.5 g ต่อ กก. · ถ้าออกกำลังกาย 1.4–2.0'],
       ['ISSN (สายออกกำลังกาย)', '1.6–2.2 g ต่อ กก.'],
     ],
-    chosen: 'ค่ากลาง ≈ 1.2 g ต่อ กก. → เป้าขั้นต่ำต่อวัน (ช่วงดี 1.2–1.6)',
+    chosen: 'ค่ากลาง ≈ 1.2 g ต่อ กก. → เป้าขั้นต่ำต่อวัน (ช่วงดี 1.2–1.6) · แผนเร่ง ≥ 0.7 กก./สัปดาห์ หรือออกกำลังกายและนับแคลคืน → 1.4 g ต่อ กก.',
     note: 'โปรตีนพอช่วยรักษากล้ามเนื้อและอิ่มนานขณะลดแคล — ถ้า BMI ≥ 30 คิดจากน้ำหนักเป้าหมายแทน · ผู้ป่วยโรคไตควรปรึกษาแพทย์',
   },
 }

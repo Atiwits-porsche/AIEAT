@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, type MealEntry } from '../lib/db'
+import { db, type MealEntry, type WeightLog } from '../lib/db'
 import {
   GUIDES, NUT, NUT_KEYS, SODIUM_MG_PER_TSP_SALT, SUGAR_G_PER_TSP, TIPS,
   byDate, customIndex, fmtN, periodRows, status, sumEntries, topContributors,
@@ -47,7 +47,48 @@ export function NutrientsCard({ entries, limits, onOpenStats }: { entries: MealE
       {s.unknown > 0 && (
         <p className="mt-2 text-[11px] text-slate-400">* {s.unknown} รายการไม่มีข้อมูลสารอาหาร (เมนูที่เพิ่มเองโดยไม่ได้ใส่ค่า) จึงไม่ถูกนับ</p>
       )}
+      <PlanBasis limits={limits} />
     </section>
+  )
+}
+
+/** บอกว่าโควตาคิดจากแผนอย่างไร */
+export function PlanBasis({ limits }: { limits: Limits }) {
+  const n = (v: number) => v.toLocaleString('th-TH')
+  const parts = [
+    `ไขมัน ≤ ${limits.fat} g (30%)`,
+    `น้ำตาล ≤ ${limits.sugar} g${limits.sugarScaled ? ' (5% ของแคล)' : ''}`,
+    `โปรตีน ${limits.proteinPerKg} g/กก.${limits.proteinBoost ? ` (${limits.proteinBoost})` : ''}`,
+    `โซเดียมคงที่ ${n(limits.sodium)} มก.`,
+  ]
+  return (
+    <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+      🎯 ผูกกับแผน: เป้า {n(limits.kcal)} kcal → {parts.join(' · ')}
+    </p>
+  )
+}
+
+/** วันก่อนกินเค็มเกิน → เตือนว่าน้ำหนักเช้าที่ขึ้นน่าจะเป็นน้ำ */
+export function SodiumWaterNote({ date, weights, limit }: { date: string; weights: WeightLog[]; limit: number }) {
+  const prev = addDays(date, -1)
+  const prevEntries = useLiveQuery(() => db.entries.where('date').equals(prev).toArray(), [prev])
+  const custom = useCustomIndex()
+  if (!prevEntries?.length) return null
+  const sodium = sumEntries(prevEntries, custom).total.sodium
+  if (sodium <= limit) return null
+  const w0 = weights.find((w) => w.date === prev)?.morningKg
+  const w1 = weights.find((w) => w.date === date)?.morningKg
+  const rise = w0 && w1 ? w1 - w0 : undefined
+  return (
+    <p className="mt-3 rounded-xl bg-sky-50 px-3 py-2 text-xs text-sky-900" role="note">
+      💧 เมื่อวานโซเดียม {fmtN('sodium', sodium)} มก. (เกณฑ์ {limit.toLocaleString('th-TH')})
+      {rise === undefined
+        ? ' — ถ้าเช้านี้น้ำหนักขึ้น น่าจะเป็นน้ำที่ร่างกายเก็บไว้ ไม่ใช่ไขมัน'
+        : rise > 0
+          ? ` — น้ำหนักเช้านี้ขึ้น ${rise.toFixed(1)} กก. ส่วนใหญ่น่าจะเป็นน้ำที่ร่างกายเก็บไว้ ไม่ใช่ไขมัน`
+          : ' — น้ำหนักเช้านี้ไม่ขึ้น ดีมาก'}
+      {(rise === undefined || rise > 0) && ' จะลงเองใน 2–3 วัน ดื่มน้ำเปล่าให้พอและกลับมากินจืดตามแผน'}
+    </p>
   )
 }
 
@@ -193,12 +234,18 @@ export function NutritionAnalysis({ entries, limits, from, today }: {
           <Budget label="ต่อสัปดาห์" v={lim * 7} k={key} />
           <Budget label={`ต่อเดือน (${data.month.days} วัน)`} v={lim * data.month.days} k={key} />
         </div>
-        {key === 'sugar' && <p className="mt-2 text-[11px] text-slate-500">= {lim / SUGAR_G_PER_TSP} ช้อนชา/วัน · {(lim * 7) / SUGAR_G_PER_TSP} ช้อนชา/สัปดาห์</p>}
-        {key === 'sodium' && <p className="mt-2 text-[11px] text-slate-500">≈ เกลือ 1 ช้อนชา/วัน · มื้อหลักละไม่ควรเกิน ~600 มก.</p>}
-        {key === 'fat' && <p className="mt-2 text-[11px] text-slate-500">30% ของเป้าแคลต่อวัน (เปลี่ยนตามเป้าแคลของคุณ)</p>}
+        {key === 'sugar' && (
+          <p className="mt-2 text-[11px] text-slate-500">
+            = {fmtN('sugar', lim / SUGAR_G_PER_TSP)} ช้อนชา/วัน · {fmtN('sugar', (lim * 7) / SUGAR_G_PER_TSP)} ช้อนชา/สัปดาห์
+            {limits.sugarScaled && ` · ลดจาก 24 g เป็น 5% ของเป้า ${limits.kcal.toLocaleString('th-TH')} kcal ตามแผน`}
+          </p>
+        )}
+        {key === 'sodium' && <p className="mt-2 text-[11px] text-slate-500">≈ เกลือ 1 ช้อนชา/วัน · มื้อหลักละไม่ควรเกิน ~600 มก. · ไม่ผูกกับแผน เพราะโซเดียมไม่มีแคล แต่ทำให้บวมน้ำ</p>}
+        {key === 'fat' && <p className="mt-2 text-[11px] text-slate-500">30% ของเป้าแคล {limits.kcal.toLocaleString('th-TH')} kcal ตามแผน (เป้าแคลลด โควตาไขมันก็ลดตาม)</p>}
         {key === 'protein' && (
           <p className="mt-2 text-[11px] text-slate-500">
-            1.2–1.6 g × {limits.refWeight.toFixed(1)} กก.{limits.adjusted && ' (น้ำหนักอ้างอิง เพราะ BMI ≥ 30)'} = {limits.protein}–{limits.proteinHigh} g/วัน
+            {limits.proteinPerKg}–1.6 g × {limits.refWeight.toFixed(1)} กก.{limits.adjusted && ' (น้ำหนักอ้างอิง เพราะ BMI ≥ 30)'} = {limits.protein}–{limits.proteinHigh} g/วัน
+            {limits.proteinBoost && ` · เพิ่มจาก 1.2 เพราะ${limits.proteinBoost} ช่วยรักษากล้ามเนื้อ`}
           </p>
         )}
         <div className="mt-3 space-y-2">

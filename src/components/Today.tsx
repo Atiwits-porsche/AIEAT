@@ -12,7 +12,7 @@ import WeightCard from './WeightCard'
 import AddFoodSheet from './AddFoodSheet'
 import AddActivitySheet from './AddActivitySheet'
 import ActivityList from './ActivityList'
-import { EntryNutrients, NutrientsCard, useCustomIndex } from './Nutrition'
+import { EntryNutrients, NutrientsCard, SodiumWaterNote, useCustomIndex } from './Nutrition'
 import { dailyLimits, entryNutrients, type CustomIndex } from '../lib/nutrition'
 import { cheatId, cheatQuota, monthEnd, monthStart, setCheat, useCheatsBetween } from '../lib/cheat'
 
@@ -104,6 +104,7 @@ export default function Today({ profile, onOpenAccount, onOpenStats }: { profile
       </section>
 
       <NutrientsCard entries={entries} limits={limits} onOpenStats={onOpenStats} />
+      <SodiumWaterNote date={date} weights={weights} limit={limits.sodium} />
 
       <WeightCard date={date} weights={weights} profile={profile} />
 

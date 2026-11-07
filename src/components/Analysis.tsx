@@ -12,8 +12,8 @@ import PlanCard from './PlanCard'
 import CheatCard from './CheatCard'
 import { useToday } from '../lib/useToday'
 import { useExerciseBonus } from '../lib/exercise'
-import { NutritionAnalysis } from './Nutrition'
-import { dailyLimits } from '../lib/nutrition'
+import { NutritionAnalysis, useCustomIndex } from './Nutrition'
+import { byDate, dailyLimits, sodiumWaterEffect } from '../lib/nutrition'
 
 const RANGES = [
   { key: 7, label: '7 วัน' },
@@ -29,6 +29,7 @@ export default function Analysis({ profile }: { profile: Profile }) {
   const today = useToday()
   const measured = useMeasuredBmr(profile)
   const bonus = useExerciseBonus(profile)
+  const custom = useCustomIndex()
 
   const data = useMemo(() => {
     if (!weights || !entries) return null
@@ -48,9 +49,19 @@ export default function Analysis({ profile }: { profile: Profile }) {
     const wChange = avgs.length >= 2 ? avgs[avgs.length - 1].avg7! - avgs[0].avg7! : undefined
     const curWeight = latestWeight(weights, today) ?? profile.startWeight
     const formula = calorieTarget(profile, curWeight, measured)
+    const limits = dailyLimits(profile, curWeight, formula.target)
+    const notes = insights(days, inRange, today)
+    const water = sodiumWaterEffect(days, byDate(inRange.filter((e) => e.date < today), custom), limits.sodium)
+    if (water && water.highAvg > water.normalAvg) {
+      const sign = (x: number) => `${x > 0 ? '+' : ''}${x.toFixed(1)}`
+      notes.push({
+        icon: '🧂', tone: 'info',
+        text: `หลังวันที่โซเดียมเกิน ${limits.sodium.toLocaleString('th-TH')} มก. (${water.highDays} ครั้ง) น้ำหนักเช้าวันถัดไปเปลี่ยนเฉลี่ย ${sign(water.highAvg)} กก. เทียบกับวันปกติ ${sign(water.normalAvg)} กก. — ส่วนต่างนี้เป็นน้ำ ไม่ใช่ไขมัน`,
+      })
+    }
     return {
       from,
-      limits: dailyLimits(profile, curWeight, formula.target),
+      limits,
       days,
       avgKcal,
       complete: complete.length,
@@ -58,13 +69,13 @@ export default function Analysis({ profile }: { profile: Profile }) {
       wChange,
       share: mealShare(inRange.filter((e) => completeSet.has(e.date))),
       top: topFoods(inRange),
-      notes: insights(days, inRange, today),
+      notes,
       weeks: weeklyRows(days, today),
       streak: streak(weights, entries, today),
       real: estimateRealTDEE(weights, entries, today),
       formula,
     }
-  }, [weights, entries, range, profile, today, measured?.kcal, measured?.weight, bonus])
+  }, [weights, entries, range, profile, today, measured?.kcal, measured?.weight, bonus, custom])
 
   if (!data) return null
 
