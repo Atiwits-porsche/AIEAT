@@ -3,8 +3,10 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, MEALS, type Meal } from '../lib/db'
 import { CATEGORIES, FOODS } from '../lib/foods'
 import { fmtInt } from '../lib/calc'
+import { NUT, NUT_KEYS, customIndex, fmtN, perUnit, scaleN, type Nutrients } from '../lib/nutrition'
+import { EntryNutrients } from './Nutrition'
 
-interface Pick { name: string; kcal: number; unit: string; tag?: string }
+interface Pick { name: string; kcal: number; unit: string; tag?: string; n?: Nutrients }
 
 const keyOf = (p: Pick) => `${p.name}|${p.unit}|${p.kcal}`
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '')
@@ -21,8 +23,9 @@ export default function AddFoodSheet({ date, meal, onClose }: { date: string; me
   const recent = useMemo(() => {
     const seen = new Set<string>()
     const out: Pick[] = []
+    const ci = customIndex(custom)
     for (const e of recentEntries) {
-      const p = { name: e.name, kcal: e.kcalPerUnit, unit: e.unit }
+      const p = { name: e.name, kcal: e.kcalPerUnit, unit: e.unit, n: perUnit(e, ci) }
       const k = keyOf(p)
       if (seen.has(k)) continue
       seen.add(k)
@@ -30,12 +33,12 @@ export default function AddFoodSheet({ date, meal, onClose }: { date: string; me
       if (out.length >= 12) break
     }
     return out
-  }, [recentEntries])
+  }, [recentEntries, custom])
 
   const all: Pick[] = useMemo(
     () => [
-      ...custom.map((c) => ({ name: c.name, kcal: c.kcal, unit: c.unit, tag: 'เมนูของฉัน' })),
-      ...FOODS.map((f) => ({ name: f.name, kcal: f.kcal, unit: f.unit, tag: f.cat })),
+      ...custom.map((c) => ({ name: c.name, kcal: c.kcal, unit: c.unit, tag: 'เมนูของฉัน', n: c.n })),
+      ...FOODS.map((f) => ({ name: f.name, kcal: f.kcal, unit: f.unit, tag: f.cat, n: f.n })),
     ],
     [custom],
   )
@@ -60,6 +63,7 @@ export default function AddFoodSheet({ date, meal, onClose }: { date: string; me
       name: picked.name,
       unit: picked.unit,
       kcalPerUnit: picked.kcal,
+      ...(picked.n ? { n: picked.n } : {}),
       qty,
       createdAt: Date.now(),
     })
@@ -146,10 +150,11 @@ function List({ items, onPick }: { items: Pick[]; onPick: (p: Pick) => void }) {
       {items.map((p) => (
         <li key={keyOf(p)}>
           <button onClick={() => onPick(p)} className="flex w-full items-center justify-between py-2.5 text-left active:bg-slate-50">
-            <span className="text-sm">
+            <span className="min-w-0 text-sm">
               {p.name} <span className="text-xs text-slate-400">/ {p.unit}</span>
+              {p.n && <span className="block leading-tight"><EntryNutrients n={p.n} lead={false} /></span>}
             </span>
-            <span className="text-sm text-slate-600">{fmtInt(p.kcal)} kcal</span>
+            <span className="shrink-0 pl-2 text-sm text-slate-600">{fmtInt(p.kcal)} kcal</span>
           </button>
         </li>
       ))}
@@ -185,6 +190,20 @@ function QtyPanel({ picked, qty, setQty, onBack, onAdd }: {
         ))}
       </div>
 
+      {picked.n ? (
+        <div className="mt-4 grid grid-cols-4 gap-1 rounded-xl bg-slate-50 p-2 text-center">
+          {NUT_KEYS.map((k) => (
+            <div key={k}>
+              <div className="text-[10px] text-slate-500">{NUT[k].icon} {NUT[k].label}</div>
+              <div className="text-sm font-semibold">{fmtN(k, scaleN(picked.n!, qty)[k])}</div>
+              <div className="text-[10px] text-slate-400">{NUT[k].unit}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 text-center text-xs text-slate-400">เมนูนี้ไม่มีข้อมูลสารอาหาร</p>
+      )}
+
       <button onClick={onAdd} className="mt-5 w-full rounded-xl bg-emerald-600 py-3 font-semibold text-white">
         เพิ่ม · {fmtInt(picked.kcal * qty)} kcal
       </button>
@@ -199,13 +218,19 @@ function CreateFood({ initialName, onCancel, onCreated }: {
   const [kcal, setKcal] = useState('')
   const [unit, setUnit] = useState('จาน')
   const [save, setSave] = useState(true)
+  const [nut, setNut] = useState<Record<keyof Nutrients, string>>({ protein: '', fat: '', sugar: '', sodium: '' })
   const n = Number(kcal)
-  const valid = name.trim() && kcal !== '' && n >= 0 && n <= 5000 && unit.trim()
+  const anyNut = NUT_KEYS.some((k) => nut[k] !== '')
+  const nutValid = NUT_KEYS.every((k) => nut[k] === '' || (Number(nut[k]) >= 0 && Number(nut[k]) <= (k === 'sodium' ? 20000 : 500)))
+  const valid = name.trim() && kcal !== '' && n >= 0 && n <= 5000 && unit.trim() && nutValid
   const input = 'w-full rounded-xl border border-slate-300 px-3 py-2.5 text-base outline-none focus:border-emerald-500'
 
   async function submit() {
     if (!valid) return
-    const p = { name: name.trim(), kcal: Math.round(n), unit: unit.trim() }
+    const nn: Nutrients | undefined = anyNut
+      ? { protein: Number(nut.protein) || 0, fat: Number(nut.fat) || 0, sugar: Number(nut.sugar) || 0, sodium: Math.round(Number(nut.sodium) || 0) }
+      : undefined
+    const p = { name: name.trim(), kcal: Math.round(n), unit: unit.trim(), ...(nn ? { n: nn } : {}) }
     if (save) await db.customFoods.add(p)
     onCreated(p)
   }
@@ -227,6 +252,19 @@ function CreateFood({ initialName, onCancel, onCreated }: {
           <input className={input} value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="จาน / ชิ้น / แก้ว" />
         </label>
       </div>
+      <details className="rounded-xl border border-slate-200 px-3 py-2 text-sm" open={anyNut}>
+        <summary className="cursor-pointer font-medium text-slate-700">สารอาหารต่อ 1 {unit || 'หน่วย'} (ไม่บังคับ)</summary>
+        <p className="mt-1 text-xs text-slate-500">ดูจากฉลากโภชนาการ · ช่องที่เว้นว่างนับเป็น 0 · ถ้าไม่กรอกเลย จะไม่นับในสรุปสารอาหาร</p>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {NUT_KEYS.map((k) => (
+            <label key={k} className="block text-xs">
+              <span className="mb-0.5 block text-slate-600">{NUT[k].icon} {NUT[k].label} ({NUT[k].unit})</span>
+              <input className={input} type="number" inputMode="decimal" min="0" value={nut[k]}
+                onChange={(e) => setNut({ ...nut, [k]: e.target.value })} />
+            </label>
+          ))}
+        </div>
+      </details>
       <label className="flex items-center gap-2 text-sm text-slate-700">
         <input type="checkbox" checked={save} onChange={(e) => setSave(e.target.checked)} className="h-4 w-4 accent-emerald-600" />
         บันทึกเป็น “เมนูของฉัน” ไว้ใช้ครั้งหน้า

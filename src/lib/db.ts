@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
+import type { Nutrients } from './nutrition'
 
 export type Sex = 'male' | 'female'
 export type Activity = 'sedentary' | 'light' | 'moderate' | 'active'
@@ -40,6 +41,8 @@ export interface MealEntry {
   name: string
   unit: string
   kcalPerUnit: number
+  /** สารอาหารต่อ 1 หน่วย (ไม่มี = ค้นจากฐานข้อมูลเมนูตามชื่อ+หน่วย) */
+  n?: Nutrients
   qty: number
   createdAt: number
 }
@@ -87,6 +90,8 @@ export interface CustomFood {
   name: string
   kcal: number
   unit: string
+  /** สารอาหารต่อ 1 หน่วย (ไม่บังคับ) */
+  n?: Nutrients
 }
 
 /** รายการที่รอส่งขึ้นคลาวด์ */

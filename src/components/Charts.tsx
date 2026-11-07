@@ -13,6 +13,7 @@ export const C = {
   axis: '#8a8984',
   text2: '#52514e',
   ref: '#9a9993',
+  ink: '#2f3b4a',
 }
 
 const H = 220
@@ -45,7 +46,7 @@ export const shortDate = (d: string) => {
   return new Date(y, m - 1, day).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
 }
 
-function xLabelIdx(n: number, w: number) {
+export function xLabelIdx(n: number, w: number) {
   const k = Math.max(2, Math.min(6, Math.floor(w / 70)))
   if (n <= k) return [...Array(n).keys()]
   const out = new Set<number>()

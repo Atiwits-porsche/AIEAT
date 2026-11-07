@@ -22,7 +22,7 @@ export default function App() {
 
   return (
     <div className="mx-auto min-h-dvh max-w-lg pb-24">
-      {tab === 'today' && <Today profile={profile} onOpenAccount={() => setTab('settings')} />}
+      {tab === 'today' && <Today profile={profile} onOpenAccount={() => setTab('settings')} onOpenStats={() => setTab('stats')} />}
       {tab === 'stats' && <Analysis profile={profile} />}
       {tab === 'exercise' && <Exercise profile={profile} />}
       {tab === 'body' && <Body profile={profile} />}

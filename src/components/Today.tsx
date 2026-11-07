@@ -12,8 +12,10 @@ import WeightCard from './WeightCard'
 import AddFoodSheet from './AddFoodSheet'
 import AddActivitySheet from './AddActivitySheet'
 import ActivityList from './ActivityList'
+import { EntryNutrients, NutrientsCard, useCustomIndex } from './Nutrition'
+import { dailyLimits, entryNutrients, type CustomIndex } from '../lib/nutrition'
 
-export default function Today({ profile, onOpenAccount }: { profile: Profile; onOpenAccount?: () => void }) {
+export default function Today({ profile, onOpenAccount, onOpenStats }: { profile: Profile; onOpenAccount?: () => void; onOpenStats?: () => void }) {
   const today = useToday()
   const [date, setDate] = useFollowToday(today, (t) => t)
   const [adding, setAdding] = useState<Meal | null>(null)
@@ -30,6 +32,8 @@ export default function Today({ profile, onOpenAccount }: { profile: Profile; on
   const eaten = entries.reduce((s, e) => s + e.kcalPerUnit * e.qty, 0)
   const remaining = target - eaten
   const isToday = date === today
+  const limits = dailyLimits(profile, weight, base)
+  const custom = useCustomIndex()
 
   return (
     <div className="px-4 pt-4">
@@ -85,6 +89,8 @@ export default function Today({ profile, onOpenAccount }: { profile: Profile; on
         </div>
       </section>
 
+      <NutrientsCard entries={entries} limits={limits} onOpenStats={onOpenStats} />
+
       <WeightCard date={date} weights={weights} profile={profile} />
 
       <section className="mt-3 rounded-2xl bg-white p-4 shadow-sm">
@@ -115,7 +121,7 @@ export default function Today({ profile, onOpenAccount }: { profile: Profile; on
             </div>
             {list.length > 0 && (
               <ul className="mt-2 divide-y divide-slate-100">
-                {list.map((e) => <EntryRow key={e.id} entry={e} />)}
+                {list.map((e) => <EntryRow key={e.id} entry={e} custom={custom} />)}
               </ul>
             )}
             <button
@@ -143,7 +149,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-function EntryRow({ entry: e }: { entry: MealEntry }) {
+function EntryRow({ entry: e, custom }: { entry: MealEntry; custom: CustomIndex }) {
   const step = async (d: number) => {
     const qty = Math.round((e.qty + d) * 2) / 2
     if (qty <= 0) return
@@ -153,7 +159,7 @@ function EntryRow({ entry: e }: { entry: MealEntry }) {
     <li className="flex items-center gap-2 py-2">
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm">{e.name}</div>
-        <div className="text-xs text-slate-500">{fmtInt(e.kcalPerUnit * e.qty)} kcal</div>
+        <div className="text-xs leading-snug text-slate-500">{fmtInt(e.kcalPerUnit * e.qty)} kcal<EntryNutrients n={entryNutrients(e, custom)} /></div>
       </div>
       <div className="flex items-center rounded-lg border border-slate-200 text-sm">
         <button onClick={() => step(-0.5)} className="px-2 py-1 text-slate-500" aria-label="ลดจำนวน">−</button>

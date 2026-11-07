@@ -11,6 +11,8 @@ import { useMeasuredBmr } from '../lib/body'
 import PlanCard from './PlanCard'
 import { useToday } from '../lib/useToday'
 import { useExerciseBonus } from '../lib/exercise'
+import { NutritionAnalysis } from './Nutrition'
+import { dailyLimits } from '../lib/nutrition'
 
 const RANGES = [
   { key: 7, label: '7 วัน' },
@@ -43,7 +45,11 @@ export default function Analysis({ profile }: { profile: Profile }) {
     const onTarget = complete.filter((d) => d.kcal <= d.target).length
     const avgs = days.filter((d) => d.avg7 !== undefined)
     const wChange = avgs.length >= 2 ? avgs[avgs.length - 1].avg7! - avgs[0].avg7! : undefined
+    const curWeight = latestWeight(weights, today) ?? profile.startWeight
+    const formula = calorieTarget(profile, curWeight, measured)
     return {
+      from,
+      limits: dailyLimits(profile, curWeight, formula.target),
       days,
       avgKcal,
       complete: complete.length,
@@ -55,7 +61,7 @@ export default function Analysis({ profile }: { profile: Profile }) {
       weeks: weeklyRows(days, today),
       streak: streak(weights, entries, today),
       real: estimateRealTDEE(weights, entries, today),
-      formula: calorieTarget(profile, latestWeight(weights, today) ?? profile.startWeight, measured),
+      formula,
     }
   }, [weights, entries, range, profile, today, measured?.kcal, measured?.weight, bonus])
 
@@ -117,6 +123,8 @@ export default function Analysis({ profile }: { profile: Profile }) {
       <Card title="🍽️ แคลอรี่รายวัน">
         <CalorieChart days={data.days} />
       </Card>
+
+      <NutritionAnalysis entries={entries ?? []} limits={data.limits} from={data.from} today={today} />
 
       {data.notes.length > 0 && (
         <Card title="💡 ข้อสังเกต">
