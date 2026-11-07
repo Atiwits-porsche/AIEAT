@@ -14,6 +14,7 @@ import AddActivitySheet from './AddActivitySheet'
 import ActivityList from './ActivityList'
 import { EntryNutrients, NutrientsCard, useCustomIndex } from './Nutrition'
 import { dailyLimits, entryNutrients, type CustomIndex } from '../lib/nutrition'
+import { cheatId, cheatQuota, monthEnd, monthStart, setCheat, useCheatsBetween } from '../lib/cheat'
 
 export default function Today({ profile, onOpenAccount, onOpenStats }: { profile: Profile; onOpenAccount?: () => void; onOpenStats?: () => void }) {
   const today = useToday()
@@ -34,6 +35,16 @@ export default function Today({ profile, onOpenAccount, onOpenStats }: { profile
   const isToday = date === today
   const limits = dailyLimits(profile, weight, base)
   const custom = useCustomIndex()
+  const monthCheats = useCheatsBetween(monthStart(date), monthEnd(date)) ?? []
+  const quota = cheatQuota(profile)
+  const cheatSet = new Set(monthCheats.map((c) => c.id))
+
+  async function toggleCheat(meal: Meal) {
+    const on = !cheatSet.has(cheatId(date, meal))
+    if (on && monthCheats.length >= quota &&
+      !confirm(`เดือนนี้ใช้ cheat meal ครบ ${quota} มื้อตามแผนแล้ว\nยังจะบันทึกมื้อนี้เป็น cheat ไหม? (จะนับเป็นเกินแผน)`)) return
+    await setCheat(date, meal, on)
+  }
 
   return (
     <div className="px-4 pt-4">
@@ -75,6 +86,9 @@ export default function Today({ profile, onOpenAccount, onOpenStats }: { profile
           {profile.planMonths && profile.planStartDate && (
             <div className="text-[11px] text-emerald-700">🎯 แผน {profile.planMonths} เดือน · ถึงเป้า {formatThaiDate(addMonths(profile.planStartDate, profile.planMonths))}</div>
           )}
+          <div className={`text-[11px] ${monthCheats.length > quota ? 'text-red-600' : 'text-orange-700'}`}>
+            🍕 Cheat เดือนนี้ {monthCheats.length}/{quota} มื้อ{monthCheats.length > quota && ' (เกินแผน)'}
+          </div>
           <div className="space-y-1 pt-1">
             {MEALS.map((m) => {
               const k = entries.filter((e) => e.meal === m.key).reduce((s, e) => s + e.kcalPerUnit * e.qty, 0)
@@ -113,12 +127,26 @@ export default function Today({ profile, onOpenAccount, onOpenStats }: { profile
       {MEALS.map((m) => {
         const list = entries.filter((e) => e.meal === m.key)
         const total = list.reduce((s, e) => s + e.kcalPerUnit * e.qty, 0)
+        const cheat = cheatSet.has(cheatId(date, m.key))
+        const nth = cheat ? [...monthCheats].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt).findIndex((c) => c.id === cheatId(date, m.key)) + 1 : 0
         return (
-          <section key={m.key} className="mt-3 rounded-2xl bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between">
+          <section key={m.key} className={`mt-3 rounded-2xl bg-white p-4 shadow-sm ${cheat ? 'ring-2 ring-orange-300' : ''}`}>
+            <div className="flex items-center justify-between gap-2">
               <h2 className="font-semibold">{m.icon} {m.label}</h2>
-              <span className="text-sm text-slate-500">{fmtInt(total)} kcal</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => toggleCheat(m.key)}
+                  aria-pressed={cheat}
+                  className={`rounded-full border px-2 py-0.5 text-[11px] ${cheat ? 'border-orange-400 bg-orange-100 font-semibold text-orange-800' : 'border-slate-200 text-slate-400'}`}
+                >🍕 {cheat ? 'Cheat meal' : 'Cheat?'}</button>
+                <span className="text-sm text-slate-500">{fmtInt(total)} kcal</span>
+              </div>
             </div>
+            {cheat && (
+              <p className={`mt-1 text-[11px] ${nth > quota ? 'text-red-600' : 'text-orange-700'}`}>
+                Cheat มื้อที่ {nth} จาก {quota} ของเดือนนี้{nth > quota ? ' — เกินแผนแล้ว' : ''} · ยังบันทึกอาหารตามจริงนะ จะได้รู้ว่ากระทบแผนแค่ไหน
+              </p>
+            )}
             {list.length > 0 && (
               <ul className="mt-2 divide-y divide-slate-100">
                 {list.map((e) => <EntryRow key={e.id} entry={e} custom={custom} />)}

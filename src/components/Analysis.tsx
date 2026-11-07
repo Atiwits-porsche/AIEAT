@@ -9,6 +9,7 @@ import {
 import { C, CalorieChart, WeightChart } from './Charts'
 import { useMeasuredBmr } from '../lib/body'
 import PlanCard from './PlanCard'
+import CheatCard from './CheatCard'
 import { useToday } from '../lib/useToday'
 import { useExerciseBonus } from '../lib/exercise'
 import { NutritionAnalysis } from './Nutrition'
@@ -96,6 +97,8 @@ export default function Analysis({ profile }: { profile: Profile }) {
       </div>
 
       <PlanCard profile={profile} weights={weights ?? []} today={today} measured={measured} />
+
+      <CheatCard profile={profile} weights={weights ?? []} entries={entries ?? []} today={today} measured={measured} bonus={bonus} />
 
       {/* TDEE จริง */}
       <Card title="🔥 พลังงานที่ใช้จริง (TDEE)">

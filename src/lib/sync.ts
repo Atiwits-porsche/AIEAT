@@ -15,7 +15,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 })
 
-type Kind = 'profile' | 'weights' | 'entries' | 'customFoods' | 'bodyScans' | 'activities'
+type Kind = 'profile' | 'weights' | 'entries' | 'customFoods' | 'bodyScans' | 'activities' | 'cheats'
 interface KindDef { kind: Kind; table: Table; byUid: boolean }
 
 const KINDS: KindDef[] = [
@@ -25,6 +25,7 @@ const KINDS: KindDef[] = [
   { kind: 'customFoods', table: db.customFoods, byUid: true },
   { kind: 'bodyScans', table: db.bodyScans, byUid: true },
   { kind: 'activities', table: db.activities, byUid: true },
+  { kind: 'cheats', table: db.cheats, byUid: false },
 ]
 const defOf = (k: string) => KINDS.find((d) => d.kind === k)
 const REMOTE = '__aieatRemote'
@@ -191,7 +192,7 @@ async function enqueueLocalNotIn(serverKeys: Set<string>) {
   for (const d of KINDS) {
     const all = await d.table.toArray()
     for (const o of all) {
-      const key = String(d.byUid ? o.uid : d.kind === 'profile' ? o.id : o.date)
+      const key = String(d.byUid ? o.uid : o.id ?? o.date)
       if (!key || key === 'undefined' || serverKeys.has(`${d.kind}:${key}`)) continue
       items.push({ id: `${d.kind}:${key}`, kind: d.kind, key, deleted: false, at: Date.now() + items.length / 1000 })
     }

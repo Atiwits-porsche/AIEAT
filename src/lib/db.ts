@@ -24,6 +24,8 @@ export interface Profile {
   /** นับแคลที่เผาผลาญจากการออกกำลังกายเพิ่มในงบแคลของวันนั้น */
   addExercise?: boolean
   exerciseLevel?: 'beginner' | 'intermediate' | 'advanced'
+  /** โควตา cheat meal ต่อเดือน (ไม่ตั้ง = ใช้ค่าแนะนำตามความเร็วแผน) */
+  cheatPerMonth?: number
 }
 
 export interface WeightLog {
@@ -94,6 +96,14 @@ export interface CustomFood {
   n?: Nutrients
 }
 
+/** มื้อที่ตั้งใจกินตามใจ (cheat meal) — 1 รายการต่อมื้อของวัน */
+export interface CheatMeal {
+  id: string // `${date}|${meal}`
+  date: string
+  meal: Meal
+  createdAt: number
+}
+
 /** รายการที่รอส่งขึ้นคลาวด์ */
 export interface SyncItem {
   id: string // `${kind}:${key}`
@@ -115,6 +125,7 @@ class AieatDB extends Dexie {
   customFoods!: EntityTable<CustomFood, 'id'>
   bodyScans!: EntityTable<BodyScan, 'id'>
   activities!: EntityTable<ActivityLog, 'id'>
+  cheats!: EntityTable<CheatMeal, 'id'>
   syncQueue!: EntityTable<SyncItem, 'id'>
 
   constructor() {
@@ -143,6 +154,7 @@ class AieatDB extends Dexie {
           })
         }
       })
+    this.version(5).stores({ cheats: 'id, date' })
   }
 }
 
@@ -156,28 +168,31 @@ export const MEALS: { key: Meal; label: string; icon: string }[] = [
 ]
 
 export async function exportAll() {
-  const [profile, weights, entries, customFoods, bodyScans, activities] = await Promise.all([
+  const [profile, weights, entries, customFoods, bodyScans, activities, cheats] = await Promise.all([
     db.profile.toArray(),
     db.weights.toArray(),
     db.entries.toArray(),
     db.customFoods.toArray(),
     db.bodyScans.toArray(),
     db.activities.toArray(),
+    db.cheats.toArray(),
   ])
-  return { app: 'aieat', version: 3, exportedAt: new Date().toISOString(), profile, weights, entries, customFoods, bodyScans, activities }
+  return { app: 'aieat', version: 4, exportedAt: new Date().toISOString(), profile, weights, entries, customFoods, bodyScans, activities, cheats }
 }
 
 export async function importAll(data: unknown) {
   const d = data as Partial<Awaited<ReturnType<typeof exportAll>>>
   if (!d || d.app !== 'aieat') throw new Error('ไฟล์นี้ไม่ใช่ข้อมูลของ AIEAT')
-  await db.transaction('rw', [db.profile, db.weights, db.entries, db.customFoods, db.bodyScans, db.activities], async () => {
+  const tables = [db.profile, db.weights, db.entries, db.customFoods, db.bodyScans, db.activities, db.cheats]
+  await db.transaction('rw', tables, async () => {
     // ใช้ collection.delete() (ไม่ใช่ clear) เพื่อให้การลบถูกซิงก์ไปเครื่องอื่นด้วย
-    for (const t of [db.profile, db.weights, db.entries, db.customFoods, db.bodyScans, db.activities]) await t.toCollection().delete()
+    for (const t of tables) await t.toCollection().delete()
     await db.profile.bulkPut(d.profile ?? [])
     await db.weights.bulkPut(d.weights ?? [])
     await db.entries.bulkPut(d.entries ?? [])
     await db.customFoods.bulkPut(d.customFoods ?? [])
     await db.bodyScans.bulkPut(d.bodyScans ?? [])
     await db.activities.bulkPut(d.activities ?? [])
+    await db.cheats.bulkPut(d.cheats ?? [])
   })
 }
