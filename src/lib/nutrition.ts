@@ -44,9 +44,9 @@ export type CustomIndex = Map<string, Nutrients>
 export const customIndex = (list: CustomFood[]): CustomIndex =>
   new Map(list.filter((c) => c.n).map((c) => [`${c.name}|${c.unit}`, c.n!]))
 
-/** สารอาหารต่อ 1 หน่วยของรายการ: ค่าที่บันทึกไว้ → ฐานข้อมูลเมนู → เมนูของฉัน */
+/** สารอาหารต่อ 1 หน่วยของรายการ: ค่าที่บันทึกไว้ → เมนูของฉัน/ค่าที่แก้เอง → ฐานข้อมูลเมนู */
 export function perUnit(e: Pick<MealEntry, 'n' | 'name' | 'unit'>, custom?: CustomIndex) {
-  return e.n ?? builtinNutrients(e.name, e.unit) ?? custom?.get(`${e.name}|${e.unit}`)
+  return e.n ?? custom?.get(`${e.name}|${e.unit}`) ?? builtinNutrients(e.name, e.unit)
 }
 
 export function entryNutrients(e: MealEntry, custom?: CustomIndex) {

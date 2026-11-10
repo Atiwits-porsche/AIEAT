@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, exportAll, type Profile } from '../lib/db'
+import { db, exportAll, type CustomFood, type Profile } from '../lib/db'
+import { builtinExact } from '../lib/foods'
+import { saveFood } from '../lib/foodEdit'
+import FoodEditor from './FoodEditor'
 import { latestWeight } from '../lib/calc'
 import { todayStr } from '../lib/date'
 import ProfileForm from './ProfileForm'
@@ -56,25 +59,7 @@ export default function Settings({ profile }: { profile: Profile }) {
 
       {msg && <p className="text-sm">{msg}</p>}
 
-      <section className="rounded-2xl bg-white p-4 shadow-sm">
-        <h2 className="font-semibold">เมนูของฉัน ({custom.length})</h2>
-        {custom.length === 0 ? (
-          <p className="mt-1 text-sm text-slate-500">ยังไม่มี เพิ่มได้จากหน้าเพิ่มอาหาร</p>
-        ) : (
-          <ul className="mt-2 divide-y divide-slate-100">
-            {custom.map((c) => (
-              <li key={c.id} className="flex items-center justify-between py-2 text-sm">
-                <span>{c.name} <span className="text-xs text-slate-400">/ {c.unit} · {c.kcal} kcal</span></span>
-                <button
-                  onClick={() => confirm(`ลบ “${c.name}”?`) && db.customFoods.delete(c.id!)}
-                  className="text-slate-300 hover:text-red-500"
-                  aria-label={`ลบ ${c.name}`}
-                >×</button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <MyFoodsCard custom={custom} />
 
       <InstallCard />
 
@@ -122,6 +107,67 @@ function InstallCard() {
         <p className="mt-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
           บน Android/Chrome: กดเมนู <b>⋮</b> มุมขวาบน → <b>“ติดตั้งแอป”</b> หรือ <b>“เพิ่มลงในหน้าจอหลัก”</b>
         </p>
+      )}
+    </section>
+  )
+}
+
+/** เมนูของฉัน + เมนูในรายการที่แก้ค่าเอง — แก้แคล/สารอาหาร หรือลบ/คืนค่าเดิม */
+function MyFoodsCard({ custom }: { custom: CustomFood[] }) {
+  const [edit, setEdit] = useState<CustomFood | null>(null)
+  const mine = custom.filter((c) => !builtinExact(c.name, c.unit))
+  const edited = custom.filter((c) => builtinExact(c.name, c.unit))
+  const Row = ({ c, builtin }: { c: CustomFood; builtin?: boolean }) => (
+    <li className="flex items-center gap-2 py-2 text-sm">
+      <span className="min-w-0 flex-1">
+        {c.name} <span className="text-xs text-slate-400">/ {c.unit} · {c.kcal} kcal</span>
+        {c.n && (
+          <span className="block text-[11px] text-slate-500">
+            โปรตีน {c.n.protein} g · ไขมัน {c.n.fat} g · น้ำตาล {c.n.sugar} g · โซเดียม {c.n.sodium} mg
+          </span>
+        )}
+      </span>
+      <button onClick={() => setEdit(c)} className="shrink-0 rounded-lg border border-slate-200 px-2 py-0.5 text-xs text-emerald-700" aria-label={`แก้ค่า ${c.name}`}>✏️ แก้</button>
+      {builtin ? (
+        <button
+          onClick={() => {
+            const b = builtinExact(c.name, c.unit)!
+            if (confirm(`คืนค่าเดิมของ “${c.name}”? รายการที่บันทึกไปแล้วจะกลับเป็นค่าเดิมด้วย`)) void saveFood(c.name, c.unit, b.kcal, b.n, true)
+          }}
+          className="shrink-0 text-xs text-slate-400 underline"
+          aria-label={`คืนค่าเดิม ${c.name}`}
+        >คืนค่าเดิม</button>
+      ) : (
+        <button
+          onClick={() => confirm(`ลบ “${c.name}”?`) && db.customFoods.delete(c.id!)}
+          className="shrink-0 px-1 text-lg text-slate-300 hover:text-red-500"
+          aria-label={`ลบ ${c.name}`}
+        >×</button>
+      )}
+    </li>
+  )
+  return (
+    <section className="rounded-2xl bg-white p-4 shadow-sm">
+      <h2 className="font-semibold">เมนูของฉัน ({mine.length})</h2>
+      {mine.length === 0 ? (
+        <p className="mt-1 text-sm text-slate-500">ยังไม่มี เพิ่มได้จากหน้าเพิ่มอาหาร</p>
+      ) : (
+        <ul className="mt-2 divide-y divide-slate-100">{mine.map((c) => <Row key={c.id} c={c} />)}</ul>
+      )}
+      {edited.length > 0 && (
+        <>
+          <h3 className="mt-3 text-sm font-semibold">เมนูในรายการที่แก้ค่า ({edited.length})</h3>
+          <ul className="mt-1 divide-y divide-slate-100">{edited.map((c) => <Row key={c.id} c={c} builtin />)}</ul>
+        </>
+      )}
+      <p className="mt-2 text-[11px] text-slate-400">แก้ค่าเมนูอื่นในรายการได้จากหน้าเพิ่มอาหาร: เลือกเมนู แล้วกด ✏️ แก้ค่า</p>
+      {edit && (
+        <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40" onClick={() => setEdit(null)}>
+          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)]" onClick={(e) => e.stopPropagation()}>
+            <FoodEditor name={edit.name} unit={edit.unit} kcal={edit.kcal} n={edit.n ?? builtinExact(edit.name, edit.unit)?.n}
+              onCancel={() => setEdit(null)} onSaved={() => setEdit(null)} />
+          </div>
+        </div>
       )}
     </section>
   )

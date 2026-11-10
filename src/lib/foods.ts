@@ -455,3 +455,5 @@ const FOOD_INDEX = new Map(FOODS.map((x) => [`${x.name}|${x.unit}`, x]))
 const FOOD_BY_NAME = new Map<string, Food | null>()
 for (const x of FOODS) FOOD_BY_NAME.set(x.name, FOOD_BY_NAME.has(x.name) ? null : x)
 export const builtinFood = (name: string, unit: string) => FOOD_INDEX.get(`${name}|${unit}`) ?? FOOD_BY_NAME.get(name) ?? undefined
+/** เมนูในฐานข้อมูลที่ชื่อและหน่วยตรงกันพอดี */
+export const builtinExact = (name: string, unit: string) => FOOD_INDEX.get(`${name}|${unit}`)

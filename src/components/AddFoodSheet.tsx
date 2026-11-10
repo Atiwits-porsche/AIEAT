@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, MEALS, type Meal } from '../lib/db'
-import { CATEGORIES, FOODS } from '../lib/foods'
+import { CATEGORIES, FOODS, builtinExact } from '../lib/foods'
 import { fmtInt } from '../lib/calc'
-import { NUT, NUT_KEYS, customIndex, fmtN, perUnit, scaleN, type Nutrients } from '../lib/nutrition'
+import { NUT, NUT_KEYS, fmtN, scaleN, type Nutrients } from '../lib/nutrition'
 import { EntryNutrients } from './Nutrition'
+import FoodEditor from './FoodEditor'
 import { MEAL_TIME } from '../lib/quality'
 import { todayStr } from '../lib/date'
 
@@ -13,7 +14,7 @@ const nowHM = () => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-interface Pick { name: string; kcal: number; unit: string; tag?: string; n?: Nutrients; k?: string }
+interface Pick { name: string; kcal: number; unit: string; tag?: string; n?: Nutrients; k?: string; edited?: boolean }
 
 const keyOf = (p: Pick) => `${p.name}|${p.unit}|${p.kcal}`
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '')
@@ -24,16 +25,27 @@ export default function AddFoodSheet({ date, meal, onClose }: { date: string; me
   const [qty, setQty] = useState(1)
   const [time, setTime] = useState(() => (date === todayStr() ? nowHM() : MEAL_TIME[meal]))
   const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState(false)
 
-  const custom = useLiveQuery(() => db.customFoods.toArray(), []) ?? []
+  const customQ = useLiveQuery(() => db.customFoods.toArray(), [])
+  const custom = useMemo(() => customQ ?? [], [customQ])
+  const loading = customQ === undefined
   const recentEntries = useLiveQuery(() => db.entries.orderBy('createdAt').reverse().limit(300).toArray(), []) ?? []
+
+  // ค่าปัจจุบันของเมนู: ค่าที่แก้เอง/เมนูของฉัน → ฐานข้อมูล
+  const byKey = useMemo(() => new Map(custom.map((c) => [`${c.name}|${c.unit}`, c])), [custom])
+  const current = useMemo(() => (name: string, unit: string): Pick | undefined => {
+    const c = byKey.get(`${name}|${unit}`)
+    const b = builtinExact(name, unit)
+    if (c) return { name, unit, kcal: c.kcal, n: c.n ?? b?.n, edited: !!b }
+    if (b) return { name, unit, kcal: b.kcal, n: b.n }
+  }, [byKey])
 
   const recent = useMemo(() => {
     const seen = new Set<string>()
     const out: Pick[] = []
-    const ci = customIndex(custom)
     for (const e of recentEntries) {
-      const p = { name: e.name, kcal: e.kcalPerUnit, unit: e.unit, n: perUnit(e, ci) }
+      const p = current(e.name, e.unit) ?? { name: e.name, kcal: e.kcalPerUnit, unit: e.unit, n: e.n }
       const k = keyOf(p)
       if (seen.has(k)) continue
       seen.add(k)
@@ -41,14 +53,17 @@ export default function AddFoodSheet({ date, meal, onClose }: { date: string; me
       if (out.length >= 12) break
     }
     return out
-  }, [recentEntries, custom])
+  }, [recentEntries, current])
 
   const all: Pick[] = useMemo(
     () => [
-      ...custom.map((c) => ({ name: c.name, kcal: c.kcal, unit: c.unit, tag: 'เมนูของฉัน', n: c.n })),
-      ...FOODS.map((f) => ({ name: f.name, kcal: f.kcal, unit: f.unit, tag: f.cat, n: f.n, k: f.k })),
+      ...custom.filter((c) => !builtinExact(c.name, c.unit)).map((c) => ({ name: c.name, kcal: c.kcal, unit: c.unit, tag: 'เมนูของฉัน', n: c.n })),
+      ...FOODS.map((f) => {
+        const o = byKey.get(`${f.name}|${f.unit}`)
+        return { name: f.name, kcal: o?.kcal ?? f.kcal, unit: f.unit, tag: f.cat, n: o?.n ?? f.n, k: f.k, edited: !!o }
+      }),
     ],
-    [custom],
+    [custom, byKey],
   )
 
   const results = useMemo(() => {
@@ -94,8 +109,14 @@ export default function AddFoodSheet({ date, meal, onClose }: { date: string; me
           <button onClick={onClose} className="text-2xl leading-none text-slate-400" aria-label="ปิด">×</button>
         </div>
 
-        {picked ? (
-          <QtyPanel picked={picked} qty={qty} setQty={setQty} time={time} setTime={setTime} onBack={() => setPicked(null)} onAdd={add} />
+        {picked && editing ? (
+          <div className="overflow-y-auto">
+            <FoodEditor name={picked.name} unit={picked.unit} kcal={picked.kcal} n={picked.n}
+              onCancel={() => setEditing(false)}
+              onSaved={(v) => { setPicked({ ...picked, ...v, edited: !!builtinExact(picked.name, picked.unit) }); setEditing(false) }} />
+          </div>
+        ) : picked ? (
+          <QtyPanel picked={picked} qty={qty} setQty={setQty} time={time} setTime={setTime} onBack={() => setPicked(null)} onAdd={add} onEdit={() => setEditing(true)} />
         ) : creating ? (
           <CreateFood
             initialName={q}
@@ -117,7 +138,7 @@ export default function AddFoodSheet({ date, meal, onClose }: { date: string; me
               </button>
             </div>
             <div className="flex-1 overflow-y-auto px-4 pb-4">
-              {q ? (
+              {loading ? null : q ? (
                 results.length ? (
                   <List items={results} onPick={(p) => { setPicked(p); setQty(1) }} />
                 ) : (
@@ -163,6 +184,7 @@ function List({ items, onPick }: { items: Pick[]; onPick: (p: Pick) => void }) {
           <button onClick={() => onPick(p)} className="flex w-full items-center justify-between py-2.5 text-left active:bg-slate-50">
             <span className="min-w-0 text-sm">
               {p.name} <span className="text-xs text-slate-400">/ {p.unit}</span>
+              {p.edited && <span className="ml-1 rounded bg-amber-50 px-1 text-[10px] text-amber-700">แก้ค่าแล้ว</span>}
               {p.n && <span className="block leading-tight"><EntryNutrients n={p.n} lead={false} /></span>}
             </span>
             <span className="shrink-0 pl-2 text-sm text-slate-600">{fmtInt(p.kcal)} kcal</span>
@@ -173,15 +195,23 @@ function List({ items, onPick }: { items: Pick[]; onPick: (p: Pick) => void }) {
   )
 }
 
-function QtyPanel({ picked, qty, setQty, time, setTime, onBack, onAdd }: {
-  picked: Pick; qty: number; setQty: (n: number) => void; time: string; setTime: (t: string) => void; onBack: () => void; onAdd: () => void
+function QtyPanel({ picked, qty, setQty, time, setTime, onBack, onAdd, onEdit }: {
+  picked: Pick; qty: number; setQty: (n: number) => void; time: string; setTime: (t: string) => void; onBack: () => void; onAdd: () => void; onEdit: () => void
 }) {
   const step = (d: number) => setQty(Math.max(0.5, Math.round((qty + d) * 2) / 2))
   return (
     <div className="p-4">
       <button onClick={onBack} className="text-sm text-slate-500">‹ กลับ</button>
-      <div className="mt-2 text-lg font-semibold">{picked.name}</div>
-      <div className="text-sm text-slate-500">{fmtInt(picked.kcal)} kcal ต่อ 1 {picked.unit}</div>
+      <div className="mt-2 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-lg font-semibold">{picked.name}</div>
+          <div className="text-sm text-slate-500">
+            {fmtInt(picked.kcal)} kcal ต่อ 1 {picked.unit}
+            {picked.edited && <span className="ml-1 rounded bg-amber-50 px-1 text-[10px] text-amber-700">แก้ค่าแล้ว</span>}
+          </div>
+        </div>
+        <button onClick={onEdit} className="shrink-0 rounded-lg border border-slate-200 px-2 py-1 text-xs text-emerald-700">✏️ แก้ค่า</button>
+      </div>
 
       <div className="mt-4 flex items-center justify-center gap-4">
         <button onClick={() => step(-0.5)} className="h-12 w-12 rounded-full border border-slate-300 text-2xl">−</button>
