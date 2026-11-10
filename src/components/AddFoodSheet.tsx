@@ -6,7 +6,7 @@ import { fmtInt } from '../lib/calc'
 import { NUT, NUT_KEYS, customIndex, fmtN, perUnit, scaleN, type Nutrients } from '../lib/nutrition'
 import { EntryNutrients } from './Nutrition'
 
-interface Pick { name: string; kcal: number; unit: string; tag?: string; n?: Nutrients }
+interface Pick { name: string; kcal: number; unit: string; tag?: string; n?: Nutrients; k?: string }
 
 const keyOf = (p: Pick) => `${p.name}|${p.unit}|${p.kcal}`
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '')
@@ -38,18 +38,20 @@ export default function AddFoodSheet({ date, meal, onClose }: { date: string; me
   const all: Pick[] = useMemo(
     () => [
       ...custom.map((c) => ({ name: c.name, kcal: c.kcal, unit: c.unit, tag: 'เมนูของฉัน', n: c.n })),
-      ...FOODS.map((f) => ({ name: f.name, kcal: f.kcal, unit: f.unit, tag: f.cat, n: f.n })),
+      ...FOODS.map((f) => ({ name: f.name, kcal: f.kcal, unit: f.unit, tag: f.cat, n: f.n, k: f.k })),
     ],
     [custom],
   )
 
   const results = useMemo(() => {
-    const n = norm(q)
-    if (!n) return []
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean).map(norm)
+    if (!words.length) return []
     const seen = new Set<string>()
+    // ทุกคำต้องเจอในชื่อ หรือคำค้นของแบรนด์ เช่น "เซเว่น โปรตีน", "bonchon", "coco หมูทอด"
     return [...recent, ...all].filter((p) => {
       const k = keyOf(p)
-      if (seen.has(k) || !norm(p.name).includes(n)) return false
+      const hay = norm(`${p.name} ${p.k ?? ''}`)
+      if (seen.has(k) || !words.every((w) => hay.includes(w))) return false
       seen.add(k)
       return true
     })
@@ -96,7 +98,7 @@ export default function AddFoodSheet({ date, meal, onClose }: { date: string; me
             <div className="px-4 pt-3">
               <input
                 autoFocus
-                placeholder="ค้นหา เช่น กะเพรา, ชาเย็น, ไข่"
+                placeholder="ค้นหา เช่น กะเพรา, ชาเย็น, เซเว่น โปรตีน, bonchon"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-base outline-none focus:border-emerald-500"
