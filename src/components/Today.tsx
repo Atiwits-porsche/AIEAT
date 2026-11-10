@@ -14,6 +14,7 @@ import AddActivitySheet from './AddActivitySheet'
 import ActivityList from './ActivityList'
 import { EntryNutrients, NutrientsCard, SodiumWaterNote, useCustomIndex } from './Nutrition'
 import { dailyLimits, entryNutrients, type CustomIndex } from '../lib/nutrition'
+import { entryTime } from '../lib/quality'
 import { cheatId, cheatQuota, monthEnd, monthStart, setCheat, useCheatsBetween } from '../lib/cheat'
 
 export default function Today({ profile, onOpenAccount, onOpenStats }: { profile: Profile; onOpenAccount?: () => void; onOpenStats?: () => void }) {
@@ -187,7 +188,11 @@ function EntryRow({ entry: e, custom }: { entry: MealEntry; custom: CustomIndex 
   return (
     <li className="flex items-center gap-2 py-2">
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm">{e.name}</div>
+        <div className="flex items-center gap-1.5">
+          <input type="time" value={e.time ?? entryTime(e) ?? ''} onChange={(ev) => db.entries.update(e.id!, { time: ev.target.value || undefined })}
+            className="w-[4.6rem] shrink-0 rounded border-0 bg-slate-100 px-1 text-[11px] text-slate-600 [&::-webkit-calendar-picker-indicator]:hidden" aria-label={`เวลาที่กิน ${e.name}`} />
+          <span className="truncate text-sm">{e.name}</span>
+        </div>
         <div className="text-xs leading-snug text-slate-500">{fmtInt(e.kcalPerUnit * e.qty)} kcal<EntryNutrients n={entryNutrients(e, custom)} /></div>
       </div>
       <div className="flex items-center rounded-lg border border-slate-200 text-sm">

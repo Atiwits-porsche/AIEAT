@@ -32,6 +32,8 @@ export interface WeightLog {
   date: string // YYYY-MM-DD
   morningKg?: number
   eveningKg?: number
+  /** รอบเอว (ซม.) วัดระดับสะดือ ตอนเช้า */
+  waistCm?: number
 }
 
 export interface MealEntry {
@@ -47,6 +49,8 @@ export interface MealEntry {
   n?: Nutrients
   qty: number
   createdAt: number
+  /** เวลาที่กิน "HH:MM" (ไม่มี = ใช้เวลาที่บันทึกถ้าเป็นวันเดียวกัน) */
+  time?: string
 }
 
 /** ผลวัดจากเครื่องวัดองค์ประกอบร่างกาย (เช่น Tanita, InBody) */

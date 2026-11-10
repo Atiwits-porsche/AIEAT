@@ -449,3 +449,9 @@ const INDEX = new Map(FOODS.map((x) => [`${x.name}|${x.unit}`, x.n]))
 const BY_NAME = new Map<string, Nutrients | null>()
 for (const x of FOODS) BY_NAME.set(x.name, BY_NAME.has(x.name) ? null : x.n)
 export const builtinNutrients = (name: string, unit: string) => INDEX.get(`${name}|${unit}`) ?? BY_NAME.get(name) ?? undefined
+
+/** เมนูในฐานข้อมูล (ใช้ดูหมวด) จาก ชื่อ + หน่วย หรือชื่ออย่างเดียวถ้าไม่ซ้ำ */
+const FOOD_INDEX = new Map(FOODS.map((x) => [`${x.name}|${x.unit}`, x]))
+const FOOD_BY_NAME = new Map<string, Food | null>()
+for (const x of FOODS) FOOD_BY_NAME.set(x.name, FOOD_BY_NAME.has(x.name) ? null : x)
+export const builtinFood = (name: string, unit: string) => FOOD_INDEX.get(`${name}|${unit}`) ?? FOOD_BY_NAME.get(name) ?? undefined

@@ -5,6 +5,13 @@ import { CATEGORIES, FOODS } from '../lib/foods'
 import { fmtInt } from '../lib/calc'
 import { NUT, NUT_KEYS, customIndex, fmtN, perUnit, scaleN, type Nutrients } from '../lib/nutrition'
 import { EntryNutrients } from './Nutrition'
+import { MEAL_TIME } from '../lib/quality'
+import { todayStr } from '../lib/date'
+
+const nowHM = () => {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
 
 interface Pick { name: string; kcal: number; unit: string; tag?: string; n?: Nutrients; k?: string }
 
@@ -15,6 +22,7 @@ export default function AddFoodSheet({ date, meal, onClose }: { date: string; me
   const [q, setQ] = useState('')
   const [picked, setPicked] = useState<Pick | null>(null)
   const [qty, setQty] = useState(1)
+  const [time, setTime] = useState(() => (date === todayStr() ? nowHM() : MEAL_TIME[meal]))
   const [creating, setCreating] = useState(false)
 
   const custom = useLiveQuery(() => db.customFoods.toArray(), []) ?? []
@@ -68,6 +76,7 @@ export default function AddFoodSheet({ date, meal, onClose }: { date: string; me
       ...(picked.n ? { n: picked.n } : {}),
       qty,
       createdAt: Date.now(),
+      ...(time ? { time } : {}),
     })
     onClose()
   }
@@ -86,7 +95,7 @@ export default function AddFoodSheet({ date, meal, onClose }: { date: string; me
         </div>
 
         {picked ? (
-          <QtyPanel picked={picked} qty={qty} setQty={setQty} onBack={() => setPicked(null)} onAdd={add} />
+          <QtyPanel picked={picked} qty={qty} setQty={setQty} time={time} setTime={setTime} onBack={() => setPicked(null)} onAdd={add} />
         ) : creating ? (
           <CreateFood
             initialName={q}
@@ -164,8 +173,8 @@ function List({ items, onPick }: { items: Pick[]; onPick: (p: Pick) => void }) {
   )
 }
 
-function QtyPanel({ picked, qty, setQty, onBack, onAdd }: {
-  picked: Pick; qty: number; setQty: (n: number) => void; onBack: () => void; onAdd: () => void
+function QtyPanel({ picked, qty, setQty, time, setTime, onBack, onAdd }: {
+  picked: Pick; qty: number; setQty: (n: number) => void; time: string; setTime: (t: string) => void; onBack: () => void; onAdd: () => void
 }) {
   const step = (d: number) => setQty(Math.max(0.5, Math.round((qty + d) * 2) / 2))
   return (
@@ -206,7 +215,13 @@ function QtyPanel({ picked, qty, setQty, onBack, onAdd }: {
         <p className="mt-4 text-center text-xs text-slate-400">เมนูนี้ไม่มีข้อมูลสารอาหาร</p>
       )}
 
-      <button onClick={onAdd} className="mt-5 w-full rounded-xl bg-emerald-600 py-3 font-semibold text-white">
+      <label className="mt-4 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
+        <span className="text-slate-600">🕘 เวลาที่กิน</span>
+        <input type="time" value={time} onChange={(e) => setTime(e.target.value)}
+          className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-base" aria-label="เวลาที่กิน" />
+      </label>
+
+      <button onClick={onAdd} className="mt-4 w-full rounded-xl bg-emerald-600 py-3 font-semibold text-white">
         เพิ่ม · {fmtInt(picked.kcal * qty)} kcal
       </button>
     </div>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, type Profile } from '../lib/db'
+import { db, MEALS, type Meal, type Profile } from '../lib/db'
 import { calorieTarget, fmt1, fmtInt, latestWeight } from '../lib/calc'
 import { addDays, formatThaiDate } from '../lib/date'
 import {
@@ -14,6 +14,12 @@ import { useToday } from '../lib/useToday'
 import { useExerciseBonus } from '../lib/exercise'
 import { NutritionAnalysis, useCustomIndex } from './Nutrition'
 import { byDate, dailyLimits, sodiumWaterEffect } from '../lib/nutrition'
+import {
+  adaptation, consistency, dayQuality, fatLossShare, incompleteDays, lossRate, overshootPatterns, plateau, timing,
+} from '../lib/quality'
+import { BehaviorCard, DietQualityCard, LossQualityCard } from './Indicators'
+
+const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.key, m.label])) as Record<Meal, string>
 
 const RANGES = [
   { key: 7, label: '7 วัน' },
@@ -26,6 +32,7 @@ export default function Analysis({ profile }: { profile: Profile }) {
   const [range, setRange] = useState<(typeof RANGES)[number]['key']>(30)
   const weights = useLiveQuery(() => db.weights.toArray(), [])
   const entries = useLiveQuery(() => db.entries.toArray(), [])
+  const scans = useLiveQuery(() => db.bodyScans.toArray(), [])
   const today = useToday()
   const measured = useMeasuredBmr(profile)
   const bonus = useExerciseBonus(profile)
@@ -39,9 +46,17 @@ export default function Analysis({ profile }: { profile: Profile }) {
       const all = [profile.createdAt, ...weights.map((w) => w.date), ...entries.map((e) => e.date)].sort()
       from = all[0] < today ? all[0] : addDays(today, -6)
     }
-    const days = summarizeDays(profile, weights, entries, dateRange(from, today), measured, bonus)
+    // วิเคราะห์ย้อนหลังอย่างน้อย 60 วัน (ใช้ตรวจวันไม่ครบ ความสม่ำเสมอ น้ำหนักนิ่ง) แล้วตัดเฉพาะช่วงที่เลือก
+    const histFrom = addDays(today, -59) < from ? addDays(today, -59) : from
+    const daysAll = summarizeDays(profile, weights, entries, dateRange(histFrom, today), measured, bonus)
+    const inc = incompleteDays(daysAll, entries, today)
+    const completeAll = new Set(daysAll.filter((d) => d.logged && d.date !== today && !inc.has(d.date)).map((d) => d.date))
+    const entriesOk = entries.filter((e) => !inc.has(e.date))
+    const days = daysAll.filter((d) => d.date >= from)
+    // วันไม่ครบถือว่าไม่ได้บันทึก ในค่าเฉลี่ยและข้อสังเกต
+    const daysAdj = days.map((d) => (inc.has(d.date) ? { ...d, logged: false } : d))
     const inRange = entries.filter((e) => e.date >= from && e.date <= today)
-    const complete = days.filter((d) => d.logged && d.date !== today)
+    const complete = days.filter((d) => completeAll.has(d.date))
     const completeSet = new Set(complete.map((d) => d.date))
     const avgKcal = complete.length ? complete.reduce((s, d) => s + d.kcal, 0) / complete.length : undefined
     const onTarget = complete.filter((d) => d.kcal <= d.target).length
@@ -50,7 +65,7 @@ export default function Analysis({ profile }: { profile: Profile }) {
     const curWeight = latestWeight(weights, today) ?? profile.startWeight
     const formula = calorieTarget(profile, curWeight, measured)
     const limits = dailyLimits(profile, curWeight, formula.target)
-    const notes = insights(days, inRange, today)
+    const notes = insights(daysAdj, inRange.filter((e) => !inc.has(e.date)), today)
     const water = sodiumWaterEffect(days, byDate(inRange.filter((e) => e.date < today), custom), limits.sodium)
     if (water && water.highAvg > water.normalAvg) {
       const sign = (x: number) => `${x > 0 ? '+' : ''}${x.toFixed(1)}`
@@ -70,12 +85,21 @@ export default function Analysis({ profile }: { profile: Profile }) {
       share: mealShare(inRange.filter((e) => completeSet.has(e.date))),
       top: topFoods(inRange),
       notes,
-      weeks: weeklyRows(days, today),
+      weeks: weeklyRows(daysAdj, today),
       streak: streak(weights, entries, today),
-      real: estimateRealTDEE(weights, entries, today),
+      real: estimateRealTDEE(weights, entriesOk, today),
       formula,
+      rate: lossRate(weights, today, curWeight),
+      plat: plateau(weights, daysAll, completeAll, today),
+      fat: fatLossShare(scans ?? [], profile.heightCm, profile.planStartDate),
+      adapt: adaptation(profile, weights, entriesOk, today, measured),
+      cons: consistency(daysAll, completeAll, today),
+      time: timing(inRange, completeSet),
+      patterns: overshootPatterns(days, inRange, completeSet, MEAL_LABEL),
+      incomplete: [...inc].filter(([d]) => d >= from).sort(([a], [b]) => a.localeCompare(b)),
+      quality: complete.map((d) => ({ date: d.date, q: dayQuality(inRange.filter((e) => e.date === d.date), limits, custom) })),
     }
-  }, [weights, entries, range, profile, today, measured?.kcal, measured?.weight, bonus, custom])
+  }, [weights, entries, scans, range, profile, today, measured?.kcal, measured?.weight, bonus, custom])
 
   if (!data) return null
 
@@ -130,6 +154,8 @@ export default function Analysis({ profile }: { profile: Profile }) {
         )}
       </Card>
 
+      <LossQualityCard rate={data.rate} plateau={data.plat} fat={data.fat} adapt={data.adapt} planRate={profile.ratePerWeek} />
+
       <Card title="⚖️ น้ำหนัก">
         <WeightChart days={data.days} goal={profile.goalWeight} />
       </Card>
@@ -139,6 +165,10 @@ export default function Analysis({ profile }: { profile: Profile }) {
       </Card>
 
       <NutritionAnalysis entries={entries ?? []} limits={data.limits} from={data.from} today={today} />
+
+      <DietQualityCard days={data.quality} />
+
+      <BehaviorCard cons={data.cons} time={data.time} patterns={data.patterns} incomplete={data.incomplete} />
 
       {data.notes.length > 0 && (
         <Card title="💡 ข้อสังเกต">

@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { db, type Profile, type WeightLog } from '../lib/db'
 import { avg7, bmi, bmiLabel, fmt1, latestWeight } from '../lib/calc'
 import { addDays } from '../lib/date'
+import { waistLogs, whtr } from '../lib/quality'
 
-type Slot = 'morningKg' | 'eveningKg'
+type Slot = 'morningKg' | 'eveningKg' | 'waistCm'
 
 export default function WeightCard({ date, weights, profile }: { date: string; weights: WeightLog[]; profile: Profile }) {
   const [editing, setEditing] = useState<Slot | null>(null)
@@ -16,6 +17,7 @@ export default function WeightCard({ date, weights, profile }: { date: string; w
   const toGoal = current - profile.goalWeight
   const lost = profile.startWeight - current
   const b = bmi(current, profile.heightCm)
+  const lastWaist = waistLogs(weights.filter((w) => w.date <= date)).pop()
 
   function open(slot: Slot) {
     setEditing(slot)
@@ -27,9 +29,9 @@ export default function WeightCard({ date, weights, profile }: { date: string; w
     const n = Number(value)
     const next: WeightLog = { ...(log ?? { date }), date }
     if (value.trim() === '') delete next[editing]
-    else if (n >= 30 && n <= 300) next[editing] = Math.round(n * 10) / 10
+    else if (editing === 'waistCm' ? n >= 40 && n <= 200 : n >= 30 && n <= 300) next[editing] = Math.round(n * 10) / 10
     else return
-    if (next.morningKg || next.eveningKg) await db.weights.put(next)
+    if (next.morningKg || next.eveningKg || next.waistCm) await db.weights.put(next)
     else await db.weights.delete(date)
     setEditing(null)
   }
@@ -52,6 +54,20 @@ export default function WeightCard({ date, weights, profile }: { date: string; w
         ))}
       </div>
 
+      <button
+        onClick={() => open('waistCm')}
+        className={`mt-2 flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm ${editing === 'waistCm' ? 'border-emerald-500 ring-2 ring-emerald-100' : 'border-slate-200'}`}
+      >
+        <span className="text-xs text-slate-500">📏 รอบเอว <span className="text-slate-400">(ระดับสะดือ สัปดาห์ละครั้ง)</span></span>
+        {log?.waistCm ? (
+          <span className="font-semibold">{fmt1(log.waistCm)} ซม.</span>
+        ) : lastWaist ? (
+          <span className="text-xs text-slate-500">ล่าสุด {fmt1(lastWaist.waistCm)} ซม. · <span className="text-emerald-700">+ วัดวันนี้</span></span>
+        ) : (
+          <span className="text-emerald-700">+ บันทึก</span>
+        )}
+      </button>
+
       {editing && (
         <div className="mt-2 flex gap-2">
           <input
@@ -59,7 +75,7 @@ export default function WeightCard({ date, weights, profile }: { date: string; w
             type="number"
             inputMode="decimal"
             step="0.1"
-            placeholder="เช่น 68.4"
+            placeholder={editing === 'waistCm' ? 'รอบเอว ซม. เช่น 86' : 'เช่น 68.4'}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && save()}
@@ -81,6 +97,9 @@ export default function WeightCard({ date, weights, profile }: { date: string; w
         <Row label="ลดไปแล้ว" value={`${fmt1(lost)} กก.`} />
         <Row label="เหลืออีก" value={toGoal > 0 ? `${fmt1(toGoal)} กก.` : 'ถึงเป้าแล้ว 🎉'} />
         <Row label="BMI" value={`${fmt1(b)} (${bmiLabel(b)})`} />
+        {lastWaist && (
+          <Row label="รอบเอว/ส่วนสูง" value={`${whtr(lastWaist.waistCm, profile.heightCm).toFixed(2)} (เป้า < 0.5)`} />
+        )}
       </dl>
       <p className="mt-2 text-[11px] text-slate-400">
         น้ำหนักเย็นมักมากกว่าเช้า 0.5–1.5 กก. จากน้ำและอาหาร ใช้น้ำหนักเช้าดูแนวโน้มจะแม่นกว่า

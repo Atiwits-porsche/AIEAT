@@ -7,6 +7,8 @@ import {
   type Limits, type NutKey, type Nutrients, type Period, type PeriodRow,
 } from '../lib/nutrition'
 import { addDays } from '../lib/date'
+import { dayQuality } from '../lib/quality'
+import { DayQualityLine } from './Indicators'
 import { C, Legend, TipRow, Tooltip, linePath, niceTicks, shortDate, useWidth, xLabelIdx } from './Charts'
 
 export function useCustomIndex() {
@@ -44,6 +46,7 @@ export function NutrientsCard({ entries, limits, onOpenStats }: { entries: MealE
       <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-3">
         {NUT_KEYS.map((k) => <NutrientBar key={k} k={k} value={s.total[k]} limit={limits[k]} />)}
       </div>
+      <DayQualityLine q={dayQuality(entries, limits, custom)} />
       {s.unknown > 0 && (
         <p className="mt-2 text-[11px] text-slate-400">* {s.unknown} รายการไม่มีข้อมูลสารอาหาร (เมนูที่เพิ่มเองโดยไม่ได้ใส่ค่า) จึงไม่ถูกนับ</p>
       )}

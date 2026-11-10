@@ -7,6 +7,7 @@ import {
   bmiScale, bodyInsights, derive, ecwScale, fatScale, goals, tbwScale, visceralScale, type Derived,
 } from '../lib/body'
 import RangeBar from './RangeBar'
+import { WaistCard } from './Indicators'
 
 export default function Body({ profile }: { profile: Profile }) {
   const scans = useLiveQuery(() => db.bodyScans.orderBy('date').reverse().toArray(), [])
@@ -23,6 +24,8 @@ export default function Body({ profile }: { profile: Profile }) {
         <h1 className="text-lg font-semibold">องค์ประกอบร่างกาย</h1>
         <button onClick={() => setEditing('new')} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white">+ เพิ่มผลวัด</button>
       </div>
+
+      <WaistCard profile={profile} />
 
       {!cur ? (
         <section className="rounded-2xl bg-white p-6 text-center shadow-sm">
