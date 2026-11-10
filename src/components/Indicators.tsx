@@ -3,9 +3,10 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, MEALS, type BodyScan, type Meal, type Profile, type WeightLog } from '../lib/db'
 import { ageOf, fmt1, fmtInt } from '../lib/calc'
 import { fatScale } from '../lib/body'
+import type { Limits } from '../lib/nutrition'
 import { formatThaiDate, todayStr } from '../lib/date'
 import {
-  bri, briScale, gradeOf, rfm, waistLimit, waistLogs, waistScale, whtr, whtrScale,
+  bri, briScale, dayTip, gradeOf, weakestPart, rfm, waistLimit, waistLogs, waistScale, whtr, whtrScale,
   PROTEIN_PER_MEAL, VF_GOAL,
   type Adaptation, type Consistency, type DayQuality, type Finding, type LossRate, type Plateau, type Timing,
 } from '../lib/quality'
@@ -391,25 +392,104 @@ function Stat({ label, v, sub, tone }: { label: string; v: string; sub?: string;
 
 const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.key, m.label])) as Record<Meal, string>
 
-/** บรรทัดสรุปในการ์ดสารอาหารหน้าบันทึก */
-export function DayQualityLine({ q }: { q: DayQuality }) {
+const partColor = (r: number) => (r >= 0.8 ? '#10b981' : r >= 0.5 ? '#f2b33d' : '#e34948')
+
+function PartBars({ parts }: { parts: DayQuality['parts'] }) {
+  return (
+    <div className="space-y-1.5">
+      {parts.map((p) => (
+        <div key={p.key} className="flex items-center gap-2 text-xs">
+          <span className="w-16 shrink-0 text-slate-600">{p.label}</span>
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-2 rounded-full" style={{ width: `${(p.got / p.max) * 100}%`, background: partColor(Math.round(p.got * 10) / 10 / p.max) }} />
+          </div>
+          <span className="w-12 shrink-0 text-right text-slate-500">{fmt1(p.got)}/{p.max}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** บรรทัดสรุปในการ์ดสารอาหารหน้าบันทึก — แตะเพื่อดูรายละเอียดของวันนั้น */
+export function DayQualityLine({ q, limits }: { q: DayQuality; limits: Limits }) {
+  const [open, setOpen] = useState(false)
   if (!q.kcal) return null
   const g = gradeOf(q.score)
   const hit = q.mealProtein.filter((m) => m.protein >= PROTEIN_PER_MEAL).length
+  const weak = weakestPart(q)
+  const sugarShare = q.total.sugar ? q.drinkSugar / q.total.sugar : 0
   return (
-    <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-2 text-center text-xs">
-      <div>
-        <div className="text-[10px] text-slate-500">คะแนนอาหาร</div>
-        <div><b className={`text-base ${g.color}`}>{q.score}</b><span className="text-slate-400">/100</span></div>
-      </div>
-      <div>
-        <div className="text-[10px] text-slate-500">🥦 ผักผลไม้</div>
-        <div><b className="text-base">{fmt1(q.vf)}</b><span className="text-slate-400">/{VF_GOAL} ส่วน</span></div>
-      </div>
-      <div>
-        <div className="text-[10px] text-slate-500">🍗 มื้อโปรตีน ≥ {PROTEIN_PER_MEAL}g</div>
-        <div><b className="text-base">{hit}</b><span className="text-slate-400">/{q.mealProtein.length || 3} มื้อ</span></div>
-      </div>
+    <div className="mt-3 rounded-xl bg-slate-50">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label="รายละเอียดคะแนนอาหารวันนี้"
+        className="grid w-full grid-cols-3 gap-2 p-2 text-center text-xs">
+        <div>
+          <div className="text-[10px] text-slate-500">คะแนนอาหาร</div>
+          <div><b className={`text-base ${g.color}`}>{q.score}</b><span className="text-slate-400">/100</span></div>
+        </div>
+        <div>
+          <div className="text-[10px] text-slate-500">🥦 ผักผลไม้</div>
+          <div><b className="text-base">{fmt1(q.vf)}</b><span className="text-slate-400">/{VF_GOAL} ส่วน</span></div>
+        </div>
+        <div>
+          <div className="text-[10px] text-slate-500">🍗 มื้อโปรตีน ≥ {PROTEIN_PER_MEAL}g</div>
+          <div><b className="text-base">{hit}</b><span className="text-slate-400">/{q.mealProtein.length || 3} มื้อ</span></div>
+        </div>
+        <div className="col-span-3 -mt-1 text-[11px] text-emerald-700">{open ? 'ซ่อนรายละเอียด ▴' : 'แตะดูรายละเอียดวันนี้ ▾'}</div>
+      </button>
+      {open && (
+        <div className="space-y-3 border-t border-slate-200 p-3">
+          <div>
+            <div className="mb-1 flex items-baseline justify-between text-xs">
+              <span className="font-medium text-slate-700">คะแนนแยกด้าน</span>
+              <span className={g.color}>{g.label}</span>
+            </div>
+            <PartBars parts={q.parts} />
+            <p className="mt-1 text-xs text-slate-600">
+              {weak ? <>ควรปรับก่อน: <b>{weak.label}</b></> : 'ทุกด้านอยู่ในเกณฑ์ดี'}
+            </p>
+          </div>
+
+          <div>
+            <div className="text-xs font-medium text-slate-700">🍗 โปรตีนแต่ละมื้อ (เป้า ≥ {PROTEIN_PER_MEAL} g)</div>
+            <div className="mt-1 grid grid-cols-3 gap-2 text-center text-xs">
+              {(['breakfast', 'lunch', 'dinner'] as Meal[]).map((m) => {
+                const x = q.mealProtein.find((y) => y.meal === m)
+                return (
+                  <div key={m} className="rounded-lg bg-white p-1.5">
+                    <div className="text-[11px] text-slate-500">{MEAL_LABEL[m]}</div>
+                    {x ? (
+                      <div className={`text-sm font-semibold ${x.protein >= PROTEIN_PER_MEAL ? 'text-emerald-700' : 'text-amber-600'}`}>
+                        {Math.round(x.protein)} g{x.protein >= PROTEIN_PER_MEAL ? ' ✓' : ''}
+                      </div>
+                    ) : <div className="text-sm text-slate-400">ยังไม่กิน</div>}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="text-xs">
+            <div className="font-medium text-slate-700">🥤 น้ำตาลจากเครื่องดื่ม</div>
+            {q.drinks.length ? (
+              <>
+                <p className="mt-0.5 text-slate-600">
+                  {Math.round(q.drinkSugar)} g ({Math.round(sugarShare * 100)}% ของน้ำตาลวันนี้ {fmt1(q.total.sugar)} g / โควตา {limits.sugar} g)
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {q.drinks.slice(0, 4).map((d, i) => (
+                    <li key={i} className="flex justify-between gap-2 text-slate-600">
+                      <span className="truncate">{d.name}</span>
+                      <span className="shrink-0">{Math.round(d.sugar)} g</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : <p className="mt-0.5 text-slate-500">ไม่มีเครื่องดื่มที่มีน้ำตาลวันนี้ ✓</p>}
+          </div>
+
+          <p role="note" className="rounded-lg bg-emerald-50 p-2 text-xs text-emerald-900">💡 {dayTip(q, limits)}</p>
+        </div>
+      )}
     </div>
   )
 }
@@ -445,17 +525,7 @@ export function DietQualityCard({ days }: { days: { date: string; q: DayQuality 
         <span className="text-xs text-slate-500">คะแนนเฉลี่ย ({n} วันที่บันทึกครบ)</span>
         <span><b className={`text-2xl ${g.color}`}>{score}</b><span className="text-sm text-slate-400">/100 · {g.label}</span></span>
       </div>
-      <div className="mt-2 space-y-1.5">
-        {parts.map((p) => (
-          <div key={p.key} className="flex items-center gap-2 text-xs">
-            <span className="w-16 shrink-0 text-slate-600">{p.label}</span>
-            <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-              <div className="h-2 rounded-full" style={{ width: `${(p.got / p.max) * 100}%`, background: p.got / p.max >= 0.8 ? '#10b981' : p.got / p.max >= 0.5 ? '#f2b33d' : '#e34948' }} />
-            </div>
-            <span className="w-12 shrink-0 text-right text-slate-500">{fmt1(p.got)}/{p.max}</span>
-          </div>
-        ))}
-      </div>
+      <div className="mt-2"><PartBars parts={parts} /></div>
       <p className="mt-1 text-xs text-slate-600">จุดที่ควรปรับก่อน: <b>{weakest.label}</b></p>
 
       <ScoreChart days={days} />

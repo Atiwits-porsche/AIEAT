@@ -46,7 +46,7 @@ export function NutrientsCard({ entries, limits, onOpenStats }: { entries: MealE
       <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-3">
         {NUT_KEYS.map((k) => <NutrientBar key={k} k={k} value={s.total[k]} limit={limits[k]} />)}
       </div>
-      <DayQualityLine q={dayQuality(entries, limits, custom)} />
+      <DayQualityLine q={dayQuality(entries, limits, custom)} limits={limits} />
       {s.unknown > 0 && (
         <p className="mt-2 text-[11px] text-slate-400">* {s.unknown} รายการไม่มีข้อมูลสารอาหาร (เมนูที่เพิ่มเองโดยไม่ได้ใส่ค่า) จึงไม่ถูกนับ</p>
       )}

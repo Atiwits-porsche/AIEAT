@@ -382,6 +382,8 @@ export interface DayQuality {
   mealProtein: { meal: Meal; protein: number }[]
   drinkSugar: number
   drinkKcal: number
+  /** เครื่องดื่มที่มีน้ำตาล เรียงจากมากไปน้อย */
+  drinks: { name: string; sugar: number }[]
   kcal: number
 }
 
@@ -410,7 +412,56 @@ export function dayQuality(entries: MealEntry[], limits: Limits, custom?: Custom
     mealProtein,
     drinkSugar: drinks.reduce((a, e) => a + (entryNutrients(e, custom)?.sugar ?? 0), 0),
     drinkKcal: drinks.reduce((a, e) => a + kcalOf(e), 0),
+    drinks: drinks
+      .map((e) => ({ name: e.qty !== 1 ? `${e.name} ×${+e.qty.toFixed(2)}` : e.name, sugar: entryNutrients(e, custom)?.sugar ?? 0 }))
+      .filter((d) => d.sugar >= 0.5)
+      .sort((a, b) => b.sugar - a.sugar),
     kcal: entries.reduce((a, e) => a + kcalOf(e), 0),
+  }
+}
+
+const MEAL_TH: Record<Meal, string> = { breakfast: 'มื้อเช้า', lunch: 'มื้อกลางวัน', dinner: 'มื้อเย็น', snack: 'ของว่าง' }
+
+/** ด้านที่คะแนนต่ำสุดของวัน (undefined = ทุกด้าน ≥ 80%) */
+export function weakestPart(q: DayQuality) {
+  const w = [...q.parts].sort((a, b) => a.got / a.max - b.got / b.max)[0]
+  return w && w.got / w.max < 0.8 ? w : undefined
+}
+
+/** คำแนะนำ 1 บรรทัดสำหรับวันนั้น อิงด้านที่อ่อนที่สุดและมื้อหลักที่ยังไม่ได้กิน */
+export function dayTip(q: DayQuality, limits: Limits): string {
+  const w = weakestPart(q)
+  if (!w) return 'วันนี้กินได้สมดุลดีแล้ว 👍'
+  const left = MAIN.filter((m) => !q.mealProtein.some((x) => x.meal === m))
+  const next = left.length === 1 ? MEAL_TH[left[0]] : left.length ? 'มื้อที่เหลือ' : undefined
+  const t = q.total
+  switch (w.key) {
+    case 'vf': {
+      const need = Math.max(1, Math.ceil(VF_GOAL - q.vf))
+      return next
+        ? `${next}เพิ่มผักผลไม้อีก ${need} ส่วน${need < VF_GOAL ? ` ก็ครบ ${VF_GOAL}` : ''} (ผัดผัก/ต้มจืด 1 จาน ≈ 1–2 ส่วน · ผลไม้ 1 กำมือ = 1 ส่วน)`
+        : `ผักผลไม้ได้ ${q.vf.toFixed(1)}/${VF_GOAL} ส่วน — พรุ่งนี้สั่งผักเพิ่ม 1 จาน หรือกินผลไม้แทนขนม`
+    }
+    case 'protein': {
+      const need = Math.max(0, Math.round(limits.protein - t.protein))
+      return next
+        ? `${next}เลือกเมนูโปรตีนสูงอีก ~${need} g (อกไก่ 100 g ≈ 31 g · ไข่ 1 ฟอง ≈ 6 g · นมโปรตีน 1 ขวด ≈ 25–35 g)`
+        : `โปรตีนขาด ${need} g — พรุ่งนี้เพิ่มไข่/อกไก่/เต้าหู้ในมื้อเช้า`
+    }
+    case 'sugar': {
+      const top = q.drinks[0]
+      return top && top.sugar >= t.sugar * 0.3
+        ? `น้ำตาลส่วนใหญ่มาจาก "${top.name}" (${Math.round(top.sugar)} g) — ครั้งหน้าสั่งหวานน้อยหรือไม่หวาน`
+        : `น้ำตาลเกินโควตาแล้ว — ที่เหลือของวันเลี่ยงขนมและเครื่องดื่มหวาน`
+    }
+    case 'sodium':
+      return next
+        ? `โซเดียมเกินแล้ว — ${next}เลี่ยงน้ำซุป น้ำจิ้ม และอาหารแปรรูป ดื่มน้ำเปล่าเพิ่ม`
+        : 'โซเดียมเกิน — พรุ่งเช้าน้ำหนักอาจขึ้นจากน้ำ ไม่ใช่ไขมัน · ดื่มน้ำเปล่าเพิ่ม'
+    case 'fat':
+      return next
+        ? `ไขมันเกินแล้ว — ${next}เลือกต้ม/นึ่ง/ย่าง แทนของทอดหรือกะทิ`
+        : 'ไขมันเกิน — ครั้งหน้าเลือกต้ม/นึ่ง/ย่าง แทนของทอดหรือกะทิ'
   }
 }
 
