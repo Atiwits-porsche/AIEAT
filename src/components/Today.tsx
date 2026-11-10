@@ -13,8 +13,8 @@ import AddFoodSheet from './AddFoodSheet'
 import AddActivitySheet from './AddActivitySheet'
 import ActivityList from './ActivityList'
 import { EntryNutrients, NutrientsCard, SodiumWaterNote, useCustomIndex } from './Nutrition'
-import { dailyLimits, entryNutrients, perUnit, type CustomIndex } from '../lib/nutrition'
-import FoodEditor from './FoodEditor'
+import { dailyLimits, entryNutrients, type CustomIndex } from '../lib/nutrition'
+import EditEntrySheet from './EditEntrySheet'
 import { entryTime } from '../lib/quality'
 import { cheatId, cheatQuota, monthEnd, monthStart, setCheat, useCheatsBetween } from '../lib/cheat'
 
@@ -193,9 +193,13 @@ function EntryRow({ entry: e, custom }: { entry: MealEntry; custom: CustomIndex 
         <div className="flex items-center gap-1.5">
           <input type="time" value={e.time ?? entryTime(e) ?? ''} onChange={(ev) => db.entries.update(e.id!, { time: ev.target.value || undefined })}
             className="w-[4.6rem] shrink-0 rounded border-0 bg-slate-100 px-1 text-[11px] text-slate-600 [&::-webkit-calendar-picker-indicator]:hidden" aria-label={`เวลาที่กิน ${e.name}`} />
-          <button onClick={() => setEditing(true)} className="min-w-0 truncate text-left text-sm" aria-label={`แก้ค่า ${e.name}`}>{e.name}</button>
+          <button onClick={() => setEditing(true)} className="min-w-0 truncate text-left text-sm" aria-label={`แก้ไข ${e.name}`}>
+            {e.name} <span className="text-[11px] text-slate-300">✏️</span>
+          </button>
         </div>
-        <div className="text-xs leading-snug text-slate-500">{fmtInt(e.kcalPerUnit * e.qty)} kcal<EntryNutrients n={entryNutrients(e, custom)} /></div>
+        <button onClick={() => setEditing(true)} tabIndex={-1} className="block text-left text-xs leading-snug text-slate-500">
+          {fmtInt(e.kcalPerUnit * e.qty)} kcal<EntryNutrients n={entryNutrients(e, custom)} />
+        </button>
       </div>
       <div className="flex items-center rounded-lg border border-slate-200 text-sm">
         <button onClick={() => step(-0.5)} className="px-2 py-1 text-slate-500" aria-label="ลดจำนวน">−</button>
@@ -207,15 +211,7 @@ function EntryRow({ entry: e, custom }: { entry: MealEntry; custom: CustomIndex 
         className="px-1 text-lg text-slate-300 hover:text-red-500"
         aria-label={`ลบ ${e.name}`}
       >×</button>
-      {editing && (
-        <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40" onClick={() => setEditing(false)}>
-          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)]" onClick={(ev) => ev.stopPropagation()}>
-            <FoodEditor name={e.name} unit={e.unit} kcal={e.kcalPerUnit} n={perUnit(e, custom)}
-              onCancel={() => setEditing(false)}
-              onSaved={async (v) => { await db.entries.update(e.id!, { kcalPerUnit: v.kcal, n: v.n }); setEditing(false) }} />
-          </div>
-        </div>
-      )}
+      {editing && <EditEntrySheet entry={e} custom={custom} onClose={() => setEditing(false)} />}
     </li>
   )
 }

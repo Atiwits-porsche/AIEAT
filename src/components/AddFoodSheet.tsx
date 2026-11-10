@@ -19,7 +19,12 @@ interface Pick { name: string; kcal: number; unit: string; tag?: string; n?: Nut
 const keyOf = (p: Pick) => `${p.name}|${p.unit}|${p.kcal}`
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '')
 
-export default function AddFoodSheet({ date, meal, onClose }: { date: string; meal: Meal; onClose: () => void }) {
+export interface PickedFood { name: string; unit: string; kcal: number; n?: Nutrients }
+
+/** onPick = โหมดเลือกเมนูอย่างเดียว (ใช้ตอนเปลี่ยนเมนูของรายการที่บันทึกไว้) */
+export default function AddFoodSheet({ date, meal, onClose, onPick }: {
+  date: string; meal: Meal; onClose: () => void; onPick?: (p: PickedFood) => void
+}) {
   const [q, setQ] = useState('')
   const [picked, setPicked] = useState<Pick | null>(null)
   const [qty, setQty] = useState(1)
@@ -80,6 +85,16 @@ export default function AddFoodSheet({ date, meal, onClose }: { date: string; me
     })
   }, [q, recent, all])
 
+  function choose(p: Pick) {
+    if (onPick) {
+      onPick({ name: p.name, unit: p.unit, kcal: p.kcal, ...(p.n ? { n: p.n } : {}) })
+      onClose()
+      return
+    }
+    setPicked(p)
+    setQty(1)
+  }
+
   async function add() {
     if (!picked || qty <= 0) return
     await db.entries.add({
@@ -99,13 +114,13 @@ export default function AddFoodSheet({ date, meal, onClose }: { date: string; me
   const mealLabel = MEALS.find((m) => m.key === meal)!
 
   return (
-    <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40" onClick={onClose}>
+    <div className={`fixed inset-0 ${onPick ? 'z-40' : 'z-30'} flex items-end justify-center bg-black/40`} onClick={onClose}>
       <div
         className="flex max-h-[92dvh] w-full max-w-lg flex-col rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-          <h2 className="font-semibold">เพิ่มใน{mealLabel.label} {mealLabel.icon}</h2>
+          <h2 className="font-semibold">{onPick ? 'เลือกเมนูใหม่' : <>เพิ่มใน{mealLabel.label} {mealLabel.icon}</>}</h2>
           <button onClick={onClose} className="text-2xl leading-none text-slate-400" aria-label="ปิด">×</button>
         </div>
 
@@ -121,7 +136,7 @@ export default function AddFoodSheet({ date, meal, onClose }: { date: string; me
           <CreateFood
             initialName={q}
             onCancel={() => setCreating(false)}
-            onCreated={(p) => { setCreating(false); setPicked(p); setQty(1) }}
+            onCreated={(p) => { setCreating(false); choose(p) }}
           />
         ) : (
           <>
@@ -140,18 +155,18 @@ export default function AddFoodSheet({ date, meal, onClose }: { date: string; me
             <div className="flex-1 overflow-y-auto px-4 pb-4">
               {loading ? null : q ? (
                 results.length ? (
-                  <List items={results} onPick={(p) => { setPicked(p); setQty(1) }} />
+                  <List items={results} onPick={(p) => choose(p)} />
                 ) : (
                   <p className="py-6 text-center text-sm text-slate-500">ไม่พบ “{q}” ลองเพิ่มเป็นเมนูของคุณเอง</p>
                 )
               ) : (
                 <>
-                  {recent.length > 0 && <Group title="🕒 กินบ่อย/ล่าสุด" items={recent} onPick={(p) => { setPicked(p); setQty(1) }} />}
+                  {recent.length > 0 && <Group title="🕒 กินบ่อย/ล่าสุด" items={recent} onPick={(p) => choose(p)} />}
                   {custom.length > 0 && (
-                    <Group title="⭐ เมนูของฉัน" items={all.filter((p) => p.tag === 'เมนูของฉัน')} onPick={(p) => { setPicked(p); setQty(1) }} />
+                    <Group title="⭐ เมนูของฉัน" items={all.filter((p) => p.tag === 'เมนูของฉัน')} onPick={(p) => choose(p)} />
                   )}
                   {CATEGORIES.map((c) => (
-                    <Group key={c} title={c} collapsed items={all.filter((p) => p.tag === c)} onPick={(p) => { setPicked(p); setQty(1) }} />
+                    <Group key={c} title={c} collapsed items={all.filter((p) => p.tag === c)} onPick={(p) => choose(p)} />
                   ))}
                 </>
               )}
