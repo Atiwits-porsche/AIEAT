@@ -7,8 +7,8 @@ import type { Limits } from '../lib/nutrition'
 import { formatThaiDate, todayStr } from '../lib/date'
 import {
   bri, briScale, dayTip, gradeOf, weakestPart, rfm, waistLimit, waistLogs, waistScale, whtr, whtrScale,
-  PROTEIN_PER_MEAL, VF_GOAL,
-  type Adaptation, type Consistency, type DayQuality, type Finding, type LossRate, type Plateau, type Timing,
+  PROTEIN_PER_MEAL, VF_GOAL, SLEEP_MAX_H, SLEEP_MIN_H, fmtHours,
+  type Adaptation, type Consistency, type DayQuality, type SleepStats, type Finding, type LossRate, type Plateau, type Timing,
 } from '../lib/quality'
 import RangeBar from './RangeBar'
 import { C, Legend, TipRow, Tooltip, linePath, niceTicks, shortDate, useWidth, xLabelIdx } from './Charts'
@@ -625,6 +625,130 @@ function ScoreChart({ days }: { days: { date: string; q: DayQuality }[] }) {
           <TipRow color={C.s1} kind="rect" label="คะแนน" value={`${hd.q.score} (${gradeOf(hd.q.score).label})`} />
           {avg[hover!] !== undefined && <TipRow color={C.ink} label="เฉลี่ย 7 วัน" value={String(Math.round(avg[hover!]!))} />}
           <div className="mt-0.5 text-[11px] text-slate-500">ผักผลไม้ {fmt1(hd.q.vf)} ส่วน · โปรตีน {Math.round(hd.q.total.protein)} g</div>
+        </Tooltip>
+      )}
+    </div>
+  )
+}
+
+// ============================ การนอน ============================
+
+const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} ชม. ${Math.round(m % 60)} นาที` : `${Math.round(m)} นาที`)
+
+export function SleepCard({ sleep }: { sleep?: SleepStats }) {
+  if (!sleep) {
+    return (
+      <Card title="😴 การนอน">
+        <p className="text-sm text-slate-600">ยังไม่มีข้อมูลการนอนในช่วงนี้ — ใส่เวลาเข้านอนและเวลาตื่นในการ์ดน้ำหนักหน้าบันทึกทุกเช้า</p>
+        <p className="mt-1 text-xs text-slate-500">นอนน้อยกว่า {SLEEP_MIN_H} ชม. ทำให้หิวง่ายขึ้นและกินเพิ่ม และตอนคุมแคล ส่วนที่ลดจะเป็นกล้ามเนื้อมากขึ้น</p>
+      </Card>
+    )
+  }
+  const { nights, avgHours, short } = sleep
+  const n = nights.length
+  const wakeWarn = sleep.wakeSd !== undefined && sleep.wakeSd > 60
+  const jlWarn = sleep.jetlag !== undefined && Math.abs(sleep.jetlag) >= 1
+  const eff = sleep.effect
+  const diff = eff ? eff.shortKcal - eff.okKcal : 0
+  return (
+    <Card title="😴 การนอน" right={<span className="text-xs text-slate-500">{n} คืน</span>}>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <Stat label="นอนเฉลี่ย/คืน" v={fmtHours(avgHours)} sub={`เป้า ${SLEEP_MIN_H}–${SLEEP_MAX_H} ชม.`} tone={avgHours < SLEEP_MIN_H ? 'warn' : undefined} />
+        <Stat label={`คืนที่นอน < ${SLEEP_MIN_H} ชม.`} v={`${short}/${n}`} sub={`${Math.round((short / n) * 100)}% ของคืนที่บันทึก`} tone={short / n > 0.3 ? 'warn' : undefined} />
+        <Stat label="เข้านอนเฉลี่ย" v={sleep.avgBed} sub={sleep.bedSd !== undefined ? `แกว่ง ±${fmtMin(sleep.bedSd)}` : undefined} />
+        <Stat label="ตื่นเฉลี่ย" v={sleep.avgWake} sub={sleep.wakeSd !== undefined ? `แกว่ง ±${fmtMin(sleep.wakeSd)}` : undefined} tone={wakeWarn ? 'warn' : undefined} />
+      </div>
+
+      <SleepChart nights={nights} />
+
+      <ul className="mt-2 space-y-1 text-xs text-slate-700">
+        {avgHours < SLEEP_MIN_H && (
+          <li>⚠️ นอนเฉลี่ยไม่ถึง {SLEEP_MIN_H} ชม. — ลองเข้านอนเร็วขึ้นวันละ 15–30 นาทีจนได้ {SLEEP_MIN_H} ชม.</li>
+        )}
+        {wakeWarn && <li>⏰ เวลาตื่นแกว่งเกิน 1 ชม. — ตื่นให้ใกล้เคียงกันทุกวัน รวมวันหยุด ช่วยให้นาฬิกาชีวิตและความหิวคงที่</li>}
+        {sleep.jetlag !== undefined && (
+          <li className={jlWarn ? 'text-amber-800' : ''}>
+            {jlWarn ? '🛌' : '✓'} วันหยุดนอน{sleep.jetlag > 0 ? 'ช้ากว่า' : 'เร็วกว่า'}วันทำงาน {fmtMin(Math.abs(sleep.jetlag) * 60)} (social jetlag)
+            {jlWarn && ' — ต่างเกิน 1 ชม. สัมพันธ์กับน้ำหนักที่มากขึ้น'}
+          </li>
+        )}
+        {eff && (
+          <li className={diff > 100 ? 'text-amber-800' : ''}>
+            🍽️ วันหลังคืนที่นอน &lt; {SLEEP_MIN_H} ชม. กินเฉลี่ย <b>{fmtInt(eff.shortKcal)}</b> kcal เทียบกับ {fmtInt(eff.okKcal)} kcal หลังคืนที่นอนพอ
+            ({diff >= 0 ? '+' : ''}{fmtInt(diff)} kcal · {eff.shortN} กับ {eff.okN} วัน)
+          </li>
+        )}
+        {!eff && n >= 3 && <li className="text-slate-500">ต้องมีวันที่บันทึกอาหารครบ หลังคืนที่นอนน้อยและนอนพออย่างละ 3 วัน จึงจะเทียบแคลที่กินได้</li>}
+      </ul>
+
+      <Sources items={[
+        'ผู้ใหญ่ควรนอน 7–9 ชม./คืน (AASM/Sleep Research Society 2015, National Sleep Foundation)',
+        'นอนน้อยทำให้กินเพิ่มเฉลี่ย ~385 kcal/วัน (meta-analysis, Al Khatib 2017) · นอนเพิ่ม ~1 ชม. กินลดลงเอง ~270 kcal/วัน (Tasali, JAMA Intern Med 2022)',
+        'คุมแคลแต่นอน 5.5 ชม. เทียบ 8.5 ชม.: ไขมันลดน้อยกว่า ~55% กล้ามเนื้อหายมากกว่า ~60% (Nedeltcheva, Ann Intern Med 2010)',
+        'social jetlag = กึ่งกลางการนอนวันหยุด (ตื่นเสาร์–อาทิตย์) − วันทำงาน (Roenneberg 2012)',
+        'ชั่วโมงนอนคิดจากเวลาเข้านอน → ตื่น ไม่หักเวลาที่นอนไม่หลับ',
+      ]} />
+    </Card>
+  )
+}
+
+const SH = 140
+const SM = { t: 8, r: 8, b: 22, l: 28 }
+
+function SleepChart({ nights }: { nights: SleepStats['nights'] }) {
+  const [ref, W] = useWidth()
+  const [hover, setHover] = useState<number | null>(null)
+  const n = nights.length
+  if (n < 2) return <div ref={ref} />
+  const iw = W - SM.l - SM.r
+  const ih = SH - SM.t - SM.b
+  const top = Math.max(10, Math.ceil(Math.max(...nights.map((x) => x.hours))))
+  const col = iw / n
+  const gap = col > 6 ? 2 : col > 3 ? 1 : 0
+  const bw = Math.max(1, col - gap)
+  const y = (v: number) => SM.t + ih - (v / top) * ih
+  const cx = (i: number) => SM.l + col * i + col / 2
+  const { ticks } = niceTicks(0, top, 4)
+  const bar = (i: number, v: number) => {
+    const x0 = SM.l + col * i + gap / 2
+    const y0 = y(v)
+    const rr = Math.min(4, bw / 2, SM.t + ih - y0)
+    return `M${x0},${SM.t + ih}V${y0 + rr}Q${x0},${y0} ${x0 + rr},${y0}H${x0 + bw - rr}Q${x0 + bw},${y0} ${x0 + bw},${y0 + rr}V${SM.t + ih}Z`
+  }
+  const hd = hover !== null ? nights[hover] : null
+  return (
+    <div ref={ref} className="relative mt-3">
+      <Legend items={[
+        { label: `นอน ≥ ${SLEEP_MIN_H} ชม.`, color: C.s1, kind: 'rect' },
+        { label: `< ${SLEEP_MIN_H} ชม.`, color: C.s2, kind: 'rect' },
+        { label: `${SLEEP_MIN_H}–${SLEEP_MAX_H} ชม.`, color: C.ref, kind: 'dash' },
+      ]} />
+      <svg width={W} height={SH} role="img" aria-label="กราฟชั่วโมงนอนรายคืน" className="block touch-pan-y">
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={SM.l} x2={W - SM.r} y1={y(t)} y2={y(t)} stroke={C.grid} />
+            <text x={SM.l - 6} y={y(t)} dy="0.32em" textAnchor="end" fontSize="10" fill={C.axis}>{t}</text>
+          </g>
+        ))}
+        {xLabelIdx(n, W).map((i) => (
+          <text key={i} x={cx(i)} y={SH - 6} textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'} fontSize="10" fill={C.axis}>{shortDate(nights[i].date)}</text>
+        ))}
+        {nights.map((x, i) => (
+          <path key={x.date} d={bar(i, x.hours)} fill={x.hours < SLEEP_MIN_H ? C.s2 : C.s1} opacity={hover === null || hover === i ? 1 : 0.55} />
+        ))}
+        {[SLEEP_MIN_H, SLEEP_MAX_H].map((h) => h <= top && (
+          <line key={h} x1={SM.l} x2={W - SM.r} y1={y(h)} y2={y(h)} stroke={C.ref} strokeWidth="1.5" strokeDasharray="4 3" />
+        ))}
+        {nights.map((x, i) => (
+          <rect key={`h${x.date}`} x={SM.l + col * i} y={SM.t} width={col} height={ih} fill="transparent"
+            onPointerEnter={() => setHover(i)} onPointerDown={() => setHover(i)} onPointerLeave={() => setHover(null)} />
+        ))}
+      </svg>
+      {hd && (
+        <Tooltip x={cx(hover!)} width={W}>
+          <div className="mb-0.5 text-slate-500">ตื่นวัน{formatThaiDate(hd.date)}</div>
+          <TipRow color={hd.hours < SLEEP_MIN_H ? C.s2 : C.s1} kind="rect" label="นอน" value={fmtHours(hd.hours)} />
+          <div className="mt-0.5 text-[11px] text-slate-500">เข้านอน {hd.bed} · ตื่น {hd.wake}</div>
         </Tooltip>
       )}
     </div>

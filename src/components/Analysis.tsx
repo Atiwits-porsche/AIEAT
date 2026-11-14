@@ -15,9 +15,9 @@ import { useExerciseBonus } from '../lib/exercise'
 import { NutritionAnalysis, useCustomIndex } from './Nutrition'
 import { byDate, dailyLimits, sodiumWaterEffect } from '../lib/nutrition'
 import {
-  adaptation, consistency, dayQuality, fatLossShare, incompleteDays, lossRate, overshootPatterns, plateau, timing,
+  adaptation, consistency, dayQuality, fatLossShare, incompleteDays, lossRate, overshootPatterns, plateau, sleepStats, timing,
 } from '../lib/quality'
-import { BehaviorCard, DietQualityCard, LossQualityCard } from './Indicators'
+import { BehaviorCard, DietQualityCard, LossQualityCard, SleepCard } from './Indicators'
 
 const MEAL_LABEL = Object.fromEntries(MEALS.map((m) => [m.key, m.label])) as Record<Meal, string>
 
@@ -96,6 +96,7 @@ export default function Analysis({ profile }: { profile: Profile }) {
       cons: consistency(daysAll, completeAll, today),
       time: timing(inRange, completeSet),
       patterns: overshootPatterns(days, inRange, completeSet, MEAL_LABEL),
+      sleep: sleepStats(weights, days, completeAll, from, today),
       incomplete: [...inc].filter(([d]) => d >= from).sort(([a], [b]) => a.localeCompare(b)),
       quality: complete.map((d) => ({ date: d.date, q: dayQuality(inRange.filter((e) => e.date === d.date), limits, custom) })),
     }
@@ -169,6 +170,8 @@ export default function Analysis({ profile }: { profile: Profile }) {
       <DietQualityCard days={data.quality} />
 
       <BehaviorCard cons={data.cons} time={data.time} patterns={data.patterns} incomplete={data.incomplete} />
+
+      <SleepCard sleep={data.sleep} />
 
       {data.notes.length > 0 && (
         <Card title="💡 ข้อสังเกต">

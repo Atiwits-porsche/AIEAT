@@ -472,3 +472,94 @@ export function gradeOf(score: number) {
   if (score >= 40) return { label: 'พอใช้', color: 'text-amber-700' }
   return { label: 'ต้องปรับ', color: 'text-red-600' }
 }
+
+// ============================ การนอน ============================
+
+export const SLEEP_MIN_H = 7
+export const SLEEP_MAX_H = 9
+
+/** ชั่วโมงนอนจากเวลาเข้านอน → ตื่น (ข้ามเที่ยงคืนได้) — นอกช่วง 1–16 ชม. ถือว่ากรอกผิด */
+export function sleepHours(bed?: string, wake?: string): number | undefined {
+  if (!bed || !wake) return undefined
+  const h = ((toMin(wake) - toMin(bed) + 1440) % 1440) / 60
+  return h >= 1 && h <= 16 ? h : undefined
+}
+
+/** นาทีนับจากเที่ยงวันก่อน: 21:00 → 540, 01:00 → 780 (ใช้หาค่าเฉลี่ยเวลาเข้านอนที่ข้ามเที่ยงคืน) */
+const fromNoon = (t: string) => (toMin(t) - 720 + 1440) % 1440
+const clockFromNoon = (m: number) => fromMin((m + 720) % 1440)
+const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
+const sd = (xs: number[]) => {
+  const m = mean(xs)
+  return Math.sqrt(mean(xs.map((x) => (x - m) ** 2)))
+}
+
+export interface Night {
+  /** วันที่ตื่น */
+  date: string
+  bed: string
+  wake: string
+  hours: number
+}
+
+export function nightsOf(weights: WeightLog[], from: string, to: string): Night[] {
+  return weights
+    .filter((w) => w.date >= from && w.date <= to)
+    .flatMap((w) => {
+      const h = sleepHours(w.sleepAt, w.wakeAt)
+      return h === undefined ? [] : [{ date: w.date, bed: w.sleepAt!, wake: w.wakeAt!, hours: h }]
+    })
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+export interface SleepStats {
+  nights: Night[]
+  avgHours: number
+  short: number
+  long: number
+  avgBed: string
+  avgWake: string
+  /** ส่วนเบี่ยงเบนเวลาตื่น (นาที) */
+  wakeSd?: number
+  bedSd?: number
+  /** ต่างของกึ่งกลางการนอน วันหยุด − วันทำงาน (ชม.) */
+  jetlag?: number
+  /** แคลของวันหลังคืนที่นอนน้อย เทียบคืนที่นอนพอ (เฉพาะวันที่บันทึกครบ) */
+  effect?: { shortKcal: number; okKcal: number; shortN: number; okN: number }
+}
+
+export function sleepStats(weights: WeightLog[], days: DaySummary[], complete: Set<string>, from: string, to: string): SleepStats | undefined {
+  const nights = nightsOf(weights, from, to)
+  if (!nights.length) return undefined
+  const beds = nights.map((n) => fromNoon(n.bed))
+  const wakes = nights.map((n) => toMin(n.wake))
+  const mid = (n: Night) => fromNoon(n.bed) + (n.hours * 60) / 2
+  const isFree = (d: string) => {
+    const dow = new Date(d + 'T12:00').getDay()
+    return dow === 0 || dow === 6
+  }
+  const free = nights.filter((n) => isFree(n.date))
+  const work = nights.filter((n) => !isFree(n.date))
+  const kcal = new Map(days.map((d) => [d.date, d.kcal]))
+  const withK = nights.filter((n) => complete.has(n.date) && kcal.has(n.date))
+  const sh = withK.filter((n) => n.hours < SLEEP_MIN_H).map((n) => kcal.get(n.date)!)
+  const ok = withK.filter((n) => n.hours >= SLEEP_MIN_H).map((n) => kcal.get(n.date)!)
+  return {
+    nights,
+    avgHours: mean(nights.map((n) => n.hours)),
+    short: nights.filter((n) => n.hours < SLEEP_MIN_H).length,
+    long: nights.filter((n) => n.hours > SLEEP_MAX_H).length,
+    avgBed: clockFromNoon(mean(beds)),
+    avgWake: fromMin(mean(wakes)),
+    wakeSd: nights.length >= 5 ? sd(wakes) : undefined,
+    bedSd: nights.length >= 5 ? sd(beds) : undefined,
+    jetlag: free.length >= 2 && work.length >= 3 ? (mean(free.map(mid)) - mean(work.map(mid))) / 60 : undefined,
+    effect: sh.length >= 3 && ok.length >= 3 ? { shortKcal: mean(sh), okKcal: mean(ok), shortN: sh.length, okN: ok.length } : undefined,
+  }
+}
+
+/** "7 ชม. 30 นาที" */
+export const fmtHours = (h: number) => {
+  const m = Math.round(h * 60)
+  return `${Math.floor(m / 60)} ชม.${m % 60 ? ` ${m % 60} นาที` : ''}`
+}

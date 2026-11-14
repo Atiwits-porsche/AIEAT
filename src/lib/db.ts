@@ -34,6 +34,10 @@ export interface WeightLog {
   eveningKg?: number
   /** รอบเอว (ซม.) วัดระดับสะดือ ตอนเช้า */
   waistCm?: number
+  /** เวลาเข้านอนคืนก่อน "HH:MM" (บันทึกไว้ที่วันที่ตื่น) */
+  sleepAt?: string
+  /** เวลาตื่นเช้าวันนี้ "HH:MM" */
+  wakeAt?: string
 }
 
 export interface MealEntry {
