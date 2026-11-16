@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { db, type Profile, type WeightLog } from '../lib/db'
 import { avg7, bmi, bmiLabel, fmt1, latestWeight } from '../lib/calc'
 import { addDays } from '../lib/date'
-import { SLEEP_MIN_H, fmtHours, sleepHours, waistLogs, whtr } from '../lib/quality'
+import { waistLogs, whtr } from '../lib/quality'
+import SleepInput from './SleepInput'
 
 type Slot = 'morningKg' | 'eveningKg' | 'waistCm'
 
@@ -40,14 +41,18 @@ export default function WeightCard({ date, weights, profile }: { date: string; w
     else await db.weights.delete(date)
   }
 
-  async function setSleep(field: 'sleepAt' | 'wakeAt', v: string) {
+  async function setSleep(v: Partial<Record<'sleepAt' | 'wakeAt', string | undefined>>) {
     const next: WeightLog = { ...(log ?? { date }), date }
-    if (v) next[field] = v
-    else delete next[field]
+    for (const [k, x] of Object.entries(v) as ['sleepAt' | 'wakeAt', string | undefined][]) {
+      if (x) next[k] = x
+      else delete next[k]
+    }
     await putLog(next)
   }
 
-  const slept = sleepHours(log?.sleepAt, log?.wakeAt)
+  const prevSleep = weights
+    .filter((w) => w.date < date && w.sleepAt && w.wakeAt)
+    .sort((a, b) => b.date.localeCompare(a.date))[0]
 
   return (
     <section className="mt-3 rounded-2xl bg-white p-4 shadow-sm">
@@ -81,28 +86,7 @@ export default function WeightCard({ date, weights, profile }: { date: string; w
         )}
       </button>
 
-      <div className="mt-2 rounded-xl border border-slate-200 px-3 py-2">
-        <div className="flex items-baseline justify-between text-xs">
-          <span className="text-slate-500">😴 การนอนเมื่อคืน</span>
-          {slept !== undefined ? (
-            <span className={`font-semibold ${slept < SLEEP_MIN_H ? 'text-amber-700' : 'text-slate-800'}`}>{fmtHours(slept)}</span>
-          ) : (
-            <span className="text-[11px] text-slate-400">ใส่เวลาเข้านอนและตื่น</span>
-          )}
-        </div>
-        <div className="mt-1 grid grid-cols-2 gap-2 text-xs">
-          <label className="flex min-w-0 items-center gap-1 rounded-lg bg-slate-50 px-2 py-1">
-            <span className="shrink-0 text-slate-500">เข้านอน</span>
-            <input type="time" value={log?.sleepAt ?? ''} onChange={(e) => setSleep('sleepAt', e.target.value)} aria-label="เวลาเข้านอน"
-              className="min-w-0 flex-1 bg-transparent text-right text-sm [&::-webkit-calendar-picker-indicator]:hidden" />
-          </label>
-          <label className="flex min-w-0 items-center gap-1 rounded-lg bg-slate-50 px-2 py-1">
-            <span className="shrink-0 text-slate-500">ตื่น</span>
-            <input type="time" value={log?.wakeAt ?? ''} onChange={(e) => setSleep('wakeAt', e.target.value)} aria-label="เวลาตื่น"
-              className="min-w-0 flex-1 bg-transparent text-right text-sm [&::-webkit-calendar-picker-indicator]:hidden" />
-          </label>
-        </div>
-      </div>
+      <SleepInput log={log} prev={prevSleep} onSet={setSleep} />
 
       {editing && (
         <div className="mt-2 flex gap-2">
