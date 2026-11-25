@@ -17,7 +17,9 @@ const nowHM = () => {
 interface Pick { name: string; kcal: number; unit: string; tag?: string; n?: Nutrients; k?: string; edited?: boolean }
 
 const keyOf = (p: Pick) => `${p.name}|${p.unit}|${p.kcal}`
-const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '')
+// ตัดวรรณยุกต์/ไม้ไต่คู้/การันต์ออก ให้สะกดเพี้ยนเล็กน้อยก็ยังค้นเจอ (ป็อป = ป๊อป)
+// และแก้คำที่คนมักสะกดผิด (กระเพรา → กะเพรา)
+const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '').replace(/[\u0E47-\u0E4E]/g, '').replace(/กระเพรา/g, 'กะเพรา')
 
 export interface PickedFood { name: string; unit: string; kcal: number; n?: Nutrients }
 
