@@ -19,7 +19,8 @@ interface Pick { name: string; kcal: number; unit: string; tag?: string; n?: Nut
 const keyOf = (p: Pick) => `${p.name}|${p.unit}|${p.kcal}`
 // ตัดวรรณยุกต์/ไม้ไต่คู้/การันต์ออก ให้สะกดเพี้ยนเล็กน้อยก็ยังค้นเจอ (ป็อป = ป๊อป)
 // และแก้คำที่คนมักสะกดผิด (กระเพรา → กะเพรา)
-const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '').replace(/[\u0E47-\u0E4E]/g, '').replace(/กระเพรา/g, 'กะเพรา')
+const normExact = (s: string) => s.toLowerCase().replace(/\s+/g, '').replace(/กระเพรา/g, 'กะเพรา')
+const norm = (s: string) => normExact(s).replace(/[\u0E47-\u0E4E]/g, '')
 
 export interface PickedFood { name: string; unit: string; kcal: number; n?: Nutrients }
 
@@ -78,13 +79,21 @@ export default function AddFoodSheet({ date, meal, onClose, onPick }: {
     if (!words.length) return []
     const seen = new Set<string>()
     // ทุกคำต้องเจอในชื่อ หรือคำค้นของแบรนด์ เช่น "เซเว่น โปรตีน", "bonchon", "coco หมูทอด"
-    return [...recent, ...all].filter((p) => {
+    const hits = [...recent, ...all].filter((p) => {
       const k = keyOf(p)
       const hay = norm(`${p.name} ${p.k ?? ''}`)
       if (seen.has(k) || !words.every((w) => hay.includes(w))) return false
       seen.add(k)
       return true
     })
+    // ลำดับ: ชื่อตรงทุกตัวอักษร → ชื่อตรงเมื่อไม่สนวรรณยุกต์ → เจอจากคำค้นของร้าน/หมวด
+    // (sort แบบ stable: เมนูล่าสุดยังอยู่บนในกลุ่มเดียวกัน)
+    const exact = q.toLowerCase().split(/\s+/).filter(Boolean).map(normExact)
+    const inName = (p: Pick) => {
+      if (exact.every((w) => normExact(p.name).includes(w))) return 0
+      return words.every((w) => norm(p.name).includes(w)) ? 1 : 2
+    }
+    return hits.map((p) => [inName(p), p] as const).sort((a, b) => a[0] - b[0]).map(([, p]) => p)
   }, [q, recent, all])
 
   function choose(p: Pick) {
