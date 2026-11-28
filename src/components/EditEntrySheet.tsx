@@ -5,6 +5,8 @@ import { NUT, NUT_KEYS, fmtN, perUnit, scaleN, type CustomIndex, type Nutrients 
 import { entryTime } from '../lib/quality'
 import AddFoodSheet, { type PickedFood } from './AddFoodSheet'
 import FoodEditor from './FoodEditor'
+import MalaCalc from './MalaCalc'
+import { malaParse } from '../lib/mala'
 
 interface Draft {
   name: string
@@ -29,7 +31,8 @@ export default function EditEntrySheet({ entry: e, custom, onClose }: { entry: M
     time: e.time ?? entryTime(e) ?? '',
     date: e.date,
   }))
-  const [mode, setMode] = useState<'form' | 'pick' | 'values'>('form')
+  const [mode, setMode] = useState<'form' | 'pick' | 'values' | 'mala'>('form')
+  const malaPrev = malaParse(d.name)
   const qty = Number(d.qty)
   const qtyOk = d.qty !== '' && qty > 0 && qty <= 50
   const valid = qtyOk && /^\d{4}-\d{2}-\d{2}$/.test(d.date)
@@ -69,7 +72,10 @@ export default function EditEntrySheet({ entry: e, custom, onClose }: { entry: M
   return (
     <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40" onClick={onClose}>
       <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)]" onClick={(ev) => ev.stopPropagation()}>
-        {mode === 'values' ? (
+        {mode === 'mala' ? (
+          <MalaCalc initial={malaPrev} submitLabel="ใช้ค่านี้" onBack={() => setMode('form')}
+            onSubmit={(v) => { setD({ ...d, name: v.name, unit: 'ชาม', kcalPerUnit: v.kcal, n: v.n }); setMode('form') }} />
+        ) : mode === 'values' ? (
           <FoodEditor name={d.name} unit={d.unit} kcal={d.kcalPerUnit} n={d.n}
             onCancel={() => setMode('form')}
             onSaved={(v) => { setD({ ...d, kcalPerUnit: v.kcal, n: v.n }); setMode('form') }} />
@@ -92,6 +98,11 @@ export default function EditEntrySheet({ entry: e, custom, onClose }: { entry: M
                   <button onClick={() => setMode('pick')} className="flex-1 rounded-lg border border-slate-200 bg-white py-1.5 text-xs text-emerald-700">🔄 เปลี่ยนเมนู</button>
                   <button onClick={() => setMode('values')} className="flex-1 rounded-lg border border-slate-200 bg-white py-1.5 text-xs text-emerald-700">✏️ แก้แคล/สารอาหาร</button>
                 </div>
+                {d.name.startsWith('หม่าล่าตัก') && (
+                  <button onClick={() => setMode('mala')} className="mt-2 w-full rounded-lg border border-emerald-200 bg-emerald-50 py-1.5 text-xs font-medium text-emerald-800">
+                    🧮 คำนวณใหม่จากน้ำหนัก + สัดส่วน
+                  </button>
+                )}
               </div>
 
               <div>

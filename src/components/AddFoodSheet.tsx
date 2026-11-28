@@ -8,6 +8,8 @@ import { EntryNutrients } from './Nutrition'
 import FoodEditor from './FoodEditor'
 import { MEAL_TIME } from '../lib/quality'
 import { todayStr } from '../lib/date'
+import { MALA_DEFAULT, malaParse, type MalaInput } from '../lib/mala'
+import MalaCalc from './MalaCalc'
 
 const nowHM = () => {
   const d = new Date()
@@ -34,6 +36,7 @@ export default function AddFoodSheet({ date, meal, onClose, onPick }: {
   const [time, setTime] = useState(() => (date === todayStr() ? nowHM() : MEAL_TIME[meal]))
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [mala, setMala] = useState<MalaInput | null>(null)
 
   const customQ = useLiveQuery(() => db.customFoods.toArray(), [])
   const custom = useMemo(() => customQ ?? [], [customQ])
@@ -106,6 +109,17 @@ export default function AddFoodSheet({ date, meal, onClose, onPick }: {
     setQty(1)
   }
 
+  async function addMala(v: { name: string; kcal: number; n: Nutrients }) {
+    if (onPick) {
+      onPick({ name: v.name, unit: 'ชาม', kcal: v.kcal, n: v.n })
+      onClose()
+      return
+    }
+    await db.entries.add({ date, meal, name: v.name, unit: 'ชาม', kcalPerUnit: v.kcal, n: v.n, qty: 1, createdAt: Date.now(), ...(time ? { time } : {}) })
+    onClose()
+  }
+  const showMala = /หมาลา|มาลา|mala/.test(norm(q))
+
   async function add() {
     if (!picked || qty <= 0) return
     await db.entries.add({
@@ -135,14 +149,18 @@ export default function AddFoodSheet({ date, meal, onClose, onPick }: {
           <button onClick={onClose} className="text-2xl leading-none text-slate-400" aria-label="ปิด">×</button>
         </div>
 
-        {picked && editing ? (
+        {mala ? (
+          <MalaCalc initial={mala} time={onPick ? undefined : time} setTime={onPick ? undefined : setTime}
+            submitLabel={onPick ? 'ใช้ค่านี้' : 'เพิ่ม'} onBack={() => setMala(null)} onSubmit={addMala} />
+        ) : picked && editing ? (
           <div className="overflow-y-auto">
             <FoodEditor name={picked.name} unit={picked.unit} kcal={picked.kcal} n={picked.n}
               onCancel={() => setEditing(false)}
               onSaved={(v) => { setPicked({ ...picked, ...v, edited: !!builtinExact(picked.name, picked.unit) }); setEditing(false) }} />
           </div>
         ) : picked ? (
-          <QtyPanel picked={picked} qty={qty} setQty={setQty} time={time} setTime={setTime} onBack={() => setPicked(null)} onAdd={add} onEdit={() => setEditing(true)} />
+          <QtyPanel picked={picked} qty={qty} setQty={setQty} time={time} setTime={setTime} onBack={() => setPicked(null)} onAdd={add} onEdit={() => setEditing(true)}
+            onMala={picked.name.startsWith('หม่าล่าตัก') ? () => { setMala(malaParse(picked.name) ?? MALA_DEFAULT); setPicked(null) } : undefined} />
         ) : creating ? (
           <CreateFood
             initialName={q}
@@ -164,6 +182,12 @@ export default function AddFoodSheet({ date, meal, onClose, onPick }: {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto px-4 pb-4">
+              {showMala && (
+                <button onClick={() => setMala(MALA_DEFAULT)} className="mt-3 w-full rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-left">
+                  <span className="block text-sm font-semibold text-emerald-800">🧮 หม่าล่าตัก: คำนวณจากน้ำหนัก</span>
+                  <span className="block text-xs text-emerald-700">ใส่กี่ขีด/กี่กรัม + สัดส่วนเนื้อ ผัก แป้ง แล้วแอปคิดแคลให้</span>
+                </button>
+              )}
               {loading ? null : q ? (
                 results.length ? (
                   <List items={results} onPick={(p) => choose(p)} />
@@ -221,8 +245,9 @@ function List({ items, onPick }: { items: Pick[]; onPick: (p: Pick) => void }) {
   )
 }
 
-function QtyPanel({ picked, qty, setQty, time, setTime, onBack, onAdd, onEdit }: {
+function QtyPanel({ picked, qty, setQty, time, setTime, onBack, onAdd, onEdit, onMala }: {
   picked: Pick; qty: number; setQty: (n: number) => void; time: string; setTime: (t: string) => void; onBack: () => void; onAdd: () => void; onEdit: () => void
+  onMala?: () => void
 }) {
   const step = (d: number) => setQty(Math.max(0.5, Math.round((qty + d) * 2) / 2))
   return (
@@ -238,6 +263,11 @@ function QtyPanel({ picked, qty, setQty, time, setTime, onBack, onAdd, onEdit }:
         </div>
         <button onClick={onEdit} className="shrink-0 rounded-lg border border-slate-200 px-2 py-1 text-xs text-emerald-700">✏️ แก้ค่า</button>
       </div>
+      {onMala && (
+        <button onClick={onMala} className="mt-2 w-full rounded-lg border border-emerald-200 bg-emerald-50 py-1.5 text-xs font-medium text-emerald-800">
+          🧮 คำนวณจากน้ำหนัก + สัดส่วน เนื้อ/ผัก/แป้ง
+        </button>
+      )}
 
       <div className="mt-4 flex items-center justify-center gap-4">
         <button onClick={() => step(-0.5)} className="h-12 w-12 rounded-full border border-slate-300 text-2xl">−</button>

@@ -1,4 +1,5 @@
 // ดัชนีชี้วัดต่างๆ: รูปร่าง, คุณภาพการลดน้ำหนัก, พฤติกรรมการกิน, คุณภาพอาหาร
+import { malaVegServings } from './mala'
 import type { BodyScan, Meal, MealEntry, Profile, Sex, WeightLog } from './db'
 import { builtinFood, type FoodCategory } from './foods'
 import { entryNutrients, sumEntries, type CustomIndex, type Limits, type Nutrients } from './nutrition'
@@ -365,6 +366,8 @@ const VF_RULES: [RegExp, number][] = [
 const FRUIT_JUICE = /น้ำ.*ปั่น|น้ำผลไม้|น้ำส้ม|สมูทตี้/
 
 export function vegFruitPerUnit(name: string, unit: string): number {
+  const mala = malaVegServings(name)
+  if (mala !== undefined) return mala
   const f = builtinFood(name, unit)
   if (f?.cat === 'ผลไม้' || /^(กล้วย|ผลไม้ตัดแต่ง)/.test(name)) {
     if (FRUIT_JUICE.test(name)) return 0
